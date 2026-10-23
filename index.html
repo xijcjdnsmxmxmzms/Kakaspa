@@ -29,6 +29,7 @@ p{margin:6px 0 0}
 .chip.draft{background:#fdeee9;color:#c4503a}
 .set label{display:flex;gap:10px;align-items:flex-start;font-size:13px;margin-top:10px}
 .set input{width:20px;height:20px;accent-color:var(--teal);flex:none;margin:0}
+.set input[type=color]{padding:0;border:0;background:none}
 /* разметка */
 .bar{height:5px;background:var(--line);border-radius:3px;margin:6px 0 2px}.bar i{display:block;height:100%;background:var(--teal);border-radius:3px;transition:width .2s}
 .pt{display:flex;gap:12px;align-items:flex-start}
@@ -106,8 +107,8 @@ const ask = msg => new Promise(res => {
 function readJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
 function writeJSON(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
-/* Настройки (лёгкие, поэтому localStorage) */
-const Settings = { level: true, auto: false, ...readJSON('pa_settings', {}) };
+/* Настройки (лёгкие, поэтому localStorage). line — цвет линий и углов на схемах */
+const Settings = { level: true, auto: false, line: '#9aa5aa', ...readJSON('pa_settings', {}) };
 const saveSettings = () => writeJSON('pa_settings', Settings);
 
 /* =====================================================================
@@ -402,24 +403,23 @@ metric('PFL to Biozygo', 'Ширина глаза к ширине скул', 19.
 
 /* =====================================================================
    6. ОЦЕНКА
+   Оценка метрики — отклонение от идеального диапазона, в процентах:
+     ниже нормы:  (мин − значение) / мин × 100
+     выше нормы:  (значение − макс) / макс × 100
+     внутри нормы: 0
+   Балл метрики (для итога): 10 − отклонение / DEV_STEP, не меньше 0.
+   Итоговая оценка = сумма баллов / количество метрик.
+   Дополнительно: средневзвешенное отклонение (веса w метрик).
    ===================================================================== */
-/* Шкала оценки метрики (z — расстояние до границы нормы в допусках, допуск = полуширина нормы):
-   внутри нормы — 10; дальше балл плавно проходит через тиры:
-   z 0.25 → 5, z 0.5 → 2.5, z 1 → 0, z 2 → −2.5, z 3 и дальше → −5.
-   Главная оценка = сумма баллов всех метрик / количество метрик. */
+const DEV_STEP = 2;                                  // сколько % отклонения снимает 1 балл
 const tolOf = m => Math.max((m.max - m.min) / 2, 1e-9);
-const SCALE = [[0, 10], [.25, 5], [.5, 2.5], [1, 0], [2, -2.5], [3, -5]];   // [z, балл]
 function scoreMetric(m, v) {
-  const mid = (m.min + m.max) / 2, half = tolOf(m), off = Math.abs(v - mid) / half;
-  const dist = v < m.min ? m.min - v : v > m.max ? v - m.max : 0;
-  if (!dist) return { z: 0, score: 10, off };
-  const z = dist / half;
-  for (let i = 1; i < SCALE.length; i++) {
-    const [z0, s0] = SCALE[i - 1], [z1, s1] = SCALE[i];
-    if (z <= z1) return { z, score: s0 + (s1 - s0) * (z - z0) / (z1 - z0), off };
-  }
-  return { z, score: SCALE[SCALE.length - 1][1], off };
+  const mid = (m.min + m.max) / 2, off = Math.abs(v - mid) / tolOf(m);
+  const dev = v < m.min ? (m.min - v) / (Math.abs(m.min) || 1) * 100
+            : v > m.max ? (v - m.max) / (Math.abs(m.max) || 1) * 100 : 0;
+  return { dev, z: dev, score: Math.max(0, 10 - dev / DEV_STEP), off };
 }
+const fmtDev = x => x.toFixed(1) + '%';
 
 /* точки метрики: у «solo»-метрик правки хранятся отдельно (cur.own) и не трогают общие точки */
 const ptsOf = m => (m.solo && cur?.own?.[m.name]) ? { ...cur.pts, ...cur.own[m.name] } : cur.pts;
@@ -434,8 +434,10 @@ function analyze(pts, level, own) {
   });
   const sum = R.reduce((t, m) => t + m.score, 0);
   const harmony = Math.min(10, sum / R.length);
+  const wsum = R.reduce((t, m) => t + m.w, 0);
+  const wdev = R.reduce((t, m) => t + m.dev * m.w, 0) / wsum;       // средневзвешенное отклонение, %
   R.forEach(m => m.cost = (10 - m.score) / R.length);            // вклад метрики в снижение оценки; сумма = 10 − оценка
-  return { R, harmony, sum };
+  return { R, harmony, sum, wdev };
 }
 const fmtVal = (v, u) => v.toFixed(2) + u;
 const label = h => h >= 9 ? 'Отличная гармония' : h >= 8 ? 'Очень хорошая гармония' : h >= 7 ? 'Хорошая гармония' : h >= 5 ? 'Средняя гармония' : 'Низкая гармония';
@@ -513,6 +515,7 @@ async function renderHome() {
     <div class="card set">
       <label><input type="checkbox" data-set="level" ${Settings.level ? 'checked' : ''}><span>Выравнивать наклон головы по линии зрачков<br><span class="mute">Фото с наклоном не искажает вертикальные метрики.</span></span></label>
       <label><input type="checkbox" data-set="auto" ${Settings.auto ? 'checked' : ''}><span>Переходить к следующей точке сразу после установки<br><span class="mute">Выключено — можно подвинуть точку, пока не нажали «›».</span></span></label>
+      <label><input type="color" data-set="line" value="${Settings.line}"><span>Цвет линий и углов на схемах</span></label>
     </div>`);
 }
 
@@ -585,23 +588,23 @@ function finish() {
 /* ---------- результат ---------- */
 function renderResult(openI = null) {
   cur.i = 0;
-  const { R, harmony, sum } = analyze(cur.pts, Settings.level, cur.own);
+  const { R, harmony, sum, wdev } = analyze(cur.pts, Settings.level, cur.own);
   cur.harmony = harmony; cur.tier = null; persist(true);
   RES = R;
   const best = [...R].sort((a, b) => b.score - a.score || a.off - b.off).slice(0, 3);
   const worst = [...R].sort((a, b) => b.cost - a.cost).filter(m => m.cost > 1e-6).slice(0, 3);
   const pill = (m, i) => {
     const pos = clamp((.5 + (m.v - (m.min + m.max) / 2) / (m.max - m.min) * .4) * 100, 3, 97);
-    return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(2)}</b><em>›</em></div>
+    return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${fmtDev(m.dev)}</b><em>›</em></div>
       <div class="zone"><i style="left:${pos}%"></i></div><div class="det"></div></div>`;
   };
   render('result', `<h1>Patrick analysis</h1><div class="mute">${fmtDate(cur.updated)} · сохранено в истории</div>
     <div class="hero" style="margin-top:12px"><img src="${cur.img}" alt=""><div><span style="font-size:15px;opacity:1">Front Harmony<br>Score</span>
       <p style="text-align:right;margin:0"><b>${harmony.toFixed(1)}</b><small style="color:#fffc"> /10</small><span>${label(harmony)}</span></p></div></div>
-    <div class="card st"><b>Сильные стороны:</b><ul>${best.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('')}</ul>
+    <div class="card st"><b>Сильные стороны:</b><ul>${best.map(m => `<li>${m.name} — отклонение ${fmtDev(m.dev)}</li>`).join('')}</ul>
       <p style="margin-top:12px"><b>Наибольший вклад в штраф:</b></p>
-      <ul>${worst.length ? worst.map(m => `<li>${m.name} — −${m.cost.toFixed(2)}</li>`).join('') : '<li>Нет штрафов</li>'}</ul>
-      <p class="mute" style="margin-top:12px">Сумма баллов: <b>${sum.toFixed(1)}</b> · метрик: <b>${R.length}</b> · оценка = ${sum.toFixed(1)} / ${R.length}</p></div>
+      <ul>${worst.length ? worst.map(m => `<li>${m.name} — отклонение ${fmtDev(m.dev)}</li>`).join('') : '<li>Нет штрафов</li>'}</ul>
+      <p class="mute" style="margin-top:12px">Сумма баллов: <b>${sum.toFixed(1)}</b> · метрик: <b>${R.length}</b> · оценка = ${sum.toFixed(1)} / ${R.length} · средневзвешенное отклонение: <b>${wdev.toFixed(1)}%</b></p></div>
     <h2>Ваши пропорции</h2>${R.map(pill).join('')}
     <div class="row"><button class="btn sec" data-a="edit">Править точки</button><button class="btn sec" data-a="home">История</button></div>
     <div class="row"><button class="btn sec" data-a="guide">Справочник точек</button></div>`);
@@ -637,7 +640,7 @@ function viewBoxFor(pts) {
 }
 const svgBase = (vb, rot, attrs = '') => `<svg ${attrs} viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"><image href="${cur.img}" width="${cur.w}" height="${cur.h}" transform="rotate(${deg(rot)})"/>`;
 
-/* дуга угла: сектор, контур и подпись со значением */
+/* дуга угла: сектор, контур и подпись со значением (цвет сектора — из настроек) */
 function arcSvg(q, vbw, sw) {
   const ua = sub(q.a, q.v), ub = sub(q.b, q.v), la = Math.hypot(ua.x, ua.y), lb = Math.hypot(ub.x, ub.y);
   if (!la || !lb) return '';
@@ -649,19 +652,19 @@ function arcSvg(q, vbw, sw) {
   if (bl < 1e-6) { bx = -e1.y; by = e1.x; bl = 1; }
   bx /= bl; by /= bl;
   const fs = vbw / 30, tr = r + fs * .95;
-  return `<path d="M${q.v.x} ${q.v.y} L${p1.x} ${p1.y} A${r} ${r} 0 0 ${sweep} ${p2.x} ${p2.y}Z" fill="#ffc94d" fill-opacity=".28" stroke="#ffc94d" stroke-width="${sw * .9}" stroke-linejoin="round"/>` +
-    `<text x="${q.v.x + bx * tr}" y="${q.v.y + by * tr}" font-size="${fs}" font-weight="700" font-family="Manrope,system-ui,sans-serif" text-anchor="middle" dominant-baseline="central" fill="#ffe29a" stroke="#031519" stroke-opacity=".75" stroke-width="${fs * .22}" paint-order="stroke" stroke-linejoin="round">${angV(ua, ub).toFixed(1)}°</text>`;
+  return `<path d="M${q.v.x} ${q.v.y} L${p1.x} ${p1.y} A${r} ${r} 0 0 ${sweep} ${p2.x} ${p2.y}Z" fill="${Settings.line}" fill-opacity=".35" stroke="${Settings.line}" stroke-width="${sw * .9}" stroke-linejoin="round"/>` +
+    `<text x="${q.v.x + bx * tr}" y="${q.v.y + by * tr}" font-size="${fs}" font-weight="700" font-family="Manrope,system-ui,sans-serif" text-anchor="middle" dominant-baseline="central" fill="#fff" stroke="#031519" stroke-opacity=".75" stroke-width="${fs * .22}" paint-order="stroke" stroke-linejoin="round">${angV(ua, ub).toFixed(1)}°</text>`;
 }
-/* линии: тёмный ореол + светлая бирюзовая линия с круглыми концами, пунктир для продолжений */
+/* линии: тёмный ореол + линия цвета из настроек с круглыми концами, пунктир для продолжений */
 function geomSvg(g, vbw, ends = true) {
-  const sw = vbw / 230;
+  const sw = vbw / 230, C = Settings.line;
   const ln = (a, b, w, extra) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${w}" stroke-linecap="round" ${extra}/>`;
   let s = '<g fill="none">';
   [...g.sg, ...g.dash].forEach(([a, b]) => s += ln(a, b, sw * 3.4, 'stroke="#031519" stroke-opacity=".32"'));
-  g.dash.forEach(([a, b]) => s += ln(a, b, sw * .9, `stroke="#fff" stroke-opacity=".8" stroke-dasharray="${sw * 3} ${sw * 2.6}"`));
-  g.sg.forEach(([a, b]) => s += ln(a, b, sw * 1.1, 'stroke="#3de6d6"'));
+  g.dash.forEach(([a, b]) => s += ln(a, b, sw * .9, `stroke="${C}" stroke-opacity=".9" stroke-dasharray="${sw * 3} ${sw * 2.6}"`));
+  g.sg.forEach(([a, b]) => s += ln(a, b, sw * 1.1, `stroke="${C}"`));
   s += '</g>' + g.an.map(q => arcSvg(q, vbw, sw)).join('');
-  if (ends) s += g.sg.flat().map(p => `<circle cx="${p.x}" cy="${p.y}" r="${sw * 1.7}" fill="#fff" stroke="#1f9aa5" stroke-width="${sw * .7}"/>`).join('');
+  if (ends) s += g.sg.flat().map(p => `<circle cx="${p.x}" cy="${p.y}" r="${sw * 1.7}" fill="#fff" stroke="${C}" stroke-width="${sw * .7}"/>`).join('');
   return s;
 }
 function measureSvg(m) {
@@ -676,7 +679,7 @@ function toggleMetric(i) {
   dt.innerHTML = measureSvg(m) + `<p>${m.ds}</p>
     <div class="gl">${used.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
     <p><b>Значение:</b> ${fmtVal(m.v, m.u)} · <b>Норма:</b> ${m.min}–${m.max}${m.u}</p>
-    <p><b>Оценка:</b> ${m.score.toFixed(2)}/10 · <b>Штраф:</b> −${m.cost.toFixed(2)}</p>
+    <p><b>Отклонение:</b> ${fmtDev(m.dev)} · <b>Балл:</b> ${m.score.toFixed(2)}/10</p>
     <button class="btn sec" data-a="fix" data-i="${i}" style="margin-top:8px">Править точки замера</button>`;
 }
 
@@ -710,15 +713,15 @@ function fixDraw() {
   const g = frameGeom(fix.m, fix.rot), vbw = fix.vb.w, sw = vbw / 230, E = fixEdit();
   $('#ov').innerHTML = geomSvg(g, vbw, false) + fix.keys.map(k => {
     const q = rotPt(E[k], fix.rot), on = k === fix.active;
-    return `<circle cx="${q.x}" cy="${q.y}" r="${sw * (on ? 2.8 : 1.9)}" fill="${on ? '#e8503a' : '#fff'}" stroke="${on ? '#fff' : '#1f6b7a'}" stroke-width="${sw * .7}"/>`;
+    return `<circle cx="${q.x}" cy="${q.y}" r="${sw * (on ? 2.8 : 1.9)}" fill="${on ? '#e8503a' : '#fff'}" stroke="${on ? '#fff' : Settings.line}" stroke-width="${sw * .7}"/>`;
   }).join('');
 }
 function fixInfo() {
   const m = fix.m;
   CTX = { pts: ptsOf(m), rot: Settings.level ? faceRot(cur.pts) : 0 };
   let v = NaN; try { v = m.f(); } catch {}
-  const ok = isFinite(v), sc = ok ? scoreMetric(m, v).score : 0, pt = PTS.find(p => p.k === fix.active);
-  $('#fxv').innerHTML = `<b style="font-size:20px">${ok ? fmtVal(v, m.u) : '—'}</b> <span class="mute">норма ${m.min}–${m.max}${m.u} · оценка ${sc.toFixed(2)}/10</span>` +
+  const ok = isFinite(v), dv = ok ? scoreMetric(m, v).dev : 0, pt = PTS.find(p => p.k === fix.active);
+  $('#fxv').innerHTML = `<b style="font-size:20px">${ok ? fmtVal(v, m.u) : '—'}</b> <span class="mute">норма ${m.min}–${m.max}${m.u} · отклонение ${dv.toFixed(1)}%</span>` +
     (pt ? `<p style="font-size:13px">Точка: ${pt.ru}</p>` : '');
 }
 function bindFix() {
@@ -807,7 +810,7 @@ document.body.addEventListener('click', e => { const o = e.target.closest('.ov')
 app.addEventListener('change', async e => {
   const t = e.target;
   if (t.id === 'sel') { cur.i = +t.value; persist(); renderMark(); scrollTo(0, 0); }
-  else if (t.dataset.set) { Settings[t.dataset.set] = t.checked; saveSettings(); }
+  else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' ? t.value : t.checked; saveSettings(); }
   else if (t.id === 'file' && t.files[0]) {
     try { cur = await createRecord(t.files[0]); await Store.put(cur); renderMark(); scrollTo(0, 0); }
     catch (err) { toast(err.message || 'Не удалось загрузить фото'); }
