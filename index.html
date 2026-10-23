@@ -595,16 +595,16 @@ function renderResult(openI = null) {
   const worst = [...R].sort((a, b) => b.cost - a.cost).filter(m => m.cost > 1e-6).slice(0, 3);
   const pill = (m, i) => {
     const pos = clamp((.5 + (m.v - (m.min + m.max) / 2) / (m.max - m.min) * .4) * 100, 3, 97);
-    return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${fmtDev(m.dev)}</b><em>›</em></div>
+    return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div>
       <div class="zone"><i style="left:${pos}%"></i></div><div class="det"></div></div>`;
   };
   render('result', `<h1>Patrick analysis</h1><div class="mute">${fmtDate(cur.updated)} · сохранено в истории</div>
     <div class="hero" style="margin-top:12px"><img src="${cur.img}" alt=""><div><span style="font-size:15px;opacity:1">Front Harmony<br>Score</span>
       <p style="text-align:right;margin:0"><b>${harmony.toFixed(1)}</b><small style="color:#fffc"> /10</small><span>${label(harmony)}</span></p></div></div>
-    <div class="card st"><b>Сильные стороны:</b><ul>${best.map(m => `<li>${m.name} — отклонение ${fmtDev(m.dev)}</li>`).join('')}</ul>
+    <div class="card st"><b>Сильные стороны:</b><ul>${best.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('')}</ul>
       <p style="margin-top:12px"><b>Наибольший вклад в штраф:</b></p>
-      <ul>${worst.length ? worst.map(m => `<li>${m.name} — отклонение ${fmtDev(m.dev)}</li>`).join('') : '<li>Нет штрафов</li>'}</ul>
-      <p class="mute" style="margin-top:12px">Сумма баллов: <b>${sum.toFixed(1)}</b> · метрик: <b>${R.length}</b> · оценка = ${sum.toFixed(1)} / ${R.length} · средневзвешенное отклонение: <b>${wdev.toFixed(1)}%</b></p></div>
+      <ul>${worst.length ? worst.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('') : '<li>Нет штрафов</li>'}</ul>
+      <p class="mute" style="margin-top:12px">Сумма баллов: <b>${sum.toFixed(1)}</b> · метрик: <b>${R.length}</b> · оценка = ${sum.toFixed(1)} / ${R.length}</p></div>
     <h2>Ваши пропорции</h2>${R.map(pill).join('')}
     <div class="row"><button class="btn sec" data-a="edit">Править точки</button><button class="btn sec" data-a="home">История</button></div>
     <div class="row"><button class="btn sec" data-a="guide">Справочник точек</button></div>`);
@@ -679,7 +679,7 @@ function toggleMetric(i) {
   dt.innerHTML = measureSvg(m) + `<p>${m.ds}</p>
     <div class="gl">${used.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
     <p><b>Значение:</b> ${fmtVal(m.v, m.u)} · <b>Норма:</b> ${m.min}–${m.max}${m.u}</p>
-    <p><b>Отклонение:</b> ${fmtDev(m.dev)} · <b>Балл:</b> ${m.score.toFixed(2)}/10</p>
+    <p><b>Оценка:</b> ${m.score.toFixed(1)}/10</p>
     <button class="btn sec" data-a="fix" data-i="${i}" style="margin-top:8px">Править точки замера</button>`;
 }
 
@@ -720,8 +720,8 @@ function fixInfo() {
   const m = fix.m;
   CTX = { pts: ptsOf(m), rot: Settings.level ? faceRot(cur.pts) : 0 };
   let v = NaN; try { v = m.f(); } catch {}
-  const ok = isFinite(v), dv = ok ? scoreMetric(m, v).dev : 0, pt = PTS.find(p => p.k === fix.active);
-  $('#fxv').innerHTML = `<b style="font-size:20px">${ok ? fmtVal(v, m.u) : '—'}</b> <span class="mute">норма ${m.min}–${m.max}${m.u} · отклонение ${dv.toFixed(1)}%</span>` +
+  const ok = isFinite(v), dv = ok ? scoreMetric(m, v).score : 0, pt = PTS.find(p => p.k === fix.active);
+  $('#fxv').innerHTML = `<b style="font-size:20px">${ok ? fmtVal(v, m.u) : '—'}</b> <span class="mute">норма ${m.min}–${m.max}${m.u} · оценка ${dv.toFixed(1)}/10</span>` +
     (pt ? `<p style="font-size:13px">Точка: ${pt.ru}</p>` : '');
 }
 function bindFix() {
