@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Face Harmony</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --ink:#17353d; --muted:#6f8a92; --teal:#1f6475; --teal-soft:#b4d7de; --peach:#efd0b6;
+  --accent:#f0a06a; --pill:#eaf3f5; --bg:#f4f7f8; --card:#fff; --line:#e1ebed;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font-family:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);
+  display:flex;flex-direction:column;height:100dvh;overflow:hidden;font-size:15px;line-height:1.4}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+button:focus-visible,label:focus-within{outline:2px solid var(--teal);outline-offset:2px}
+
+/* top tabs */
+.top{flex:none;background:#fff;padding:10px 14px 10px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:4px;background:var(--pill);border-radius:999px;padding:4px}
+.tab{flex:1;padding:8px 6px;border-radius:999px;font-weight:600;font-size:13.5px;color:var(--muted);transition:background .15s,color .15s}
+.tab[aria-selected=true]{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(23,53,61,.12)}
+.tab:disabled{opacity:.4;cursor:default}
+
+main{flex:1;min-height:0;position:relative}
+.screen{position:absolute;inset:0;display:none;overflow:auto}
+.screen.on{display:block}
+#s-points.on{display:flex;flex-direction:column;overflow:hidden}
+
+.card{background:var(--card);border-radius:22px;border:1px solid var(--line)}
+.pad{padding:16px}
+h1{font-size:22px;line-height:1.2;margin:0 0 6px;font-weight:800;letter-spacing:-.01em}
+h2{font-size:18px;line-height:1.25;margin:0;font-weight:800}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 18px;border-radius:999px;font-weight:700;background:var(--pill);color:var(--teal);min-height:46px}
+.btn.primary{background:var(--teal);color:#fff}
+.btn.block{display:flex;width:100%}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* photo screen */
+.wrap{padding:14px;display:grid;gap:12px;max-width:560px;margin:0 auto}
+.drop{display:grid;place-items:center;text-align:center;min-height:260px;border-radius:22px;background:#fff;border:1.5px dashed var(--teal-soft);overflow:hidden}
+.drop img{width:100%;height:100%;object-fit:contain;max-height:420px;display:block}
+.tips{margin:0;padding-left:18px}
+.tips li{margin-bottom:4px}
+input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
+
+/* points screen */
+.stage{flex:1;min-height:0;position:relative;background:#0f1e22;touch-action:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zbtn{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);color:var(--ink);font-weight:800;font-size:18px;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.step{flex:none;background:#fff;border-top-left-radius:24px;border-top-right-radius:24px;margin-top:-18px;position:relative;padding:14px 16px calc(12px + var(--safe-b));box-shadow:0 -6px 18px rgba(23,53,61,.1)}
+.prog{height:4px;border-radius:4px;background:var(--pill);overflow:hidden;margin-bottom:10px}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--peach),var(--teal-soft),var(--teal));transition:width .2s}
+.step-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.step-n{font-size:13px;color:var(--muted);font-weight:600}
+.latin{font-size:13px;color:var(--muted);font-weight:500}
+.step-body{display:flex;gap:12px;margin-top:6px;align-items:flex-start}
+.step-desc{flex:1;font-size:14px;max-height:22dvh;overflow:auto}
+.diagram{flex:none;width:92px;height:92px;border-radius:14px;border:1px solid var(--line);background:#f8fbfb;object-fit:contain;display:none}
+.diagram.ok{display:block}
+.diagram.big{position:fixed;z-index:30;inset:12% 6% auto 6%;width:88%;height:auto;max-height:70dvh;box-shadow:0 20px 60px rgba(0,0,0,.4);background:#fff}
+.row{display:flex;gap:8px;margin-top:10px}
+.row .btn{flex:1;padding:10px 12px;min-height:42px}
+
+/* sheet */
+.sheet-bg{position:fixed;inset:0;background:rgba(15,30,34,.5);z-index:20;display:none}
+.sheet-bg.on{display:block}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:78dvh;background:#fff;border-top-left-radius:24px;border-top-right-radius:24px;display:flex;flex-direction:column;padding-bottom:var(--safe-b)}
+.sheet header{padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center}
+.sheet .list{overflow:auto;padding:0 8px 8px}
+.li{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 10px;border-radius:14px}
+.li:active{background:var(--pill)}
+.li .no{width:26px;font-size:13px;color:var(--muted);font-weight:600}
+.li .t{flex:1;font-weight:600;font-size:14px}
+.li .ck{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px;color:#fff}
+.li.done .ck{background:var(--teal);border-color:var(--teal)}
+.li.cur{background:var(--pill)}
+
+/* result */
+.hero{position:relative;border-radius:24px;overflow:hidden;background:#243b41;aspect-ratio:4/5;box-shadow:0 6px 24px rgba(23,53,61,.18)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero .shade{position:absolute;left:0;right:0;bottom:0;height:34%;background:linear-gradient(180deg,rgba(26,70,80,0),rgba(26,70,80,.88))}
+.hero .cap{position:absolute;left:16px;right:16px;bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;color:#fff}
+.hero .cap b{font-size:18px;font-weight:700;display:block;line-height:1.15}
+.hero .cap span{font-size:15px;opacity:.85}
+.score{font-size:46px;font-weight:700;line-height:1;text-align:right}
+.score small{font-size:15px;font-weight:500;opacity:.8;margin-left:3px}
+.score-l{font-size:12.5px;opacity:.85;text-align:right;margin-top:2px}
+.gear{position:absolute;right:12px;top:12px;width:38px;height:38px;border-radius:50%;background:rgba(23,53,61,.55);color:#fff;display:grid;place-items:center;backdrop-filter:blur(4px)}
+.seg{display:flex;background:var(--pill);border-radius:999px;padding:4px;gap:4px}
+.seg button{flex:1;padding:8px;border-radius:999px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(23,53,61,.12)}
+.list-h{font-size:20px;font-weight:700;margin:8px 4px 0}
+.m{background:#fff;border-radius:18px;border:1px solid var(--line);padding:12px 14px;text-align:left;width:100%;display:block}
+.m-top{display:flex;align-items:center;gap:8px}
+.m-name{font-weight:600;font-size:15px;flex:0 1 auto}
+.pill{background:var(--pill);color:var(--teal);font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.m-sc{margin-left:auto;font-size:20px;font-weight:600;color:var(--teal);font-variant-numeric:tabular-nums}
+.m-sc.bad{color:#c2623a}
+.bar{position:relative;height:9px;border-radius:9px;margin:12px 4px 4px;background:linear-gradient(90deg,var(--peach) 0%,var(--teal-soft) 30%,var(--teal-soft) 70%,var(--peach) 100%)}
+.bar i{position:absolute;top:50%;width:20px;height:11px;border-radius:7px;background:#fff;box-shadow:0 1px 4px rgba(23,53,61,.35);transform:translate(-50%,-50%)}
+.m-more{display:none;margin-top:10px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px}
+.m.open .m-more{display:block}
+.m-more b{color:var(--ink);font-weight:600}
+.toast{position:fixed;left:50%;bottom:calc(24px + var(--safe-b));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13.5px;z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="t-photo" aria-selected="true">Фото</button>
+    <button class="tab" role="tab" id="t-points" aria-selected="false" disabled>Точки</button>
+    <button class="tab" role="tab" id="t-result" aria-selected="false" disabled>Результат</button>
+  </div>
+</div>
+
+<main>
+  <!-- 1. PHOTO -->
+  <section class="screen on" id="s-photo">
+    <div class="wrap">
+      <div class="card pad">
+        <h1>Фронтальное фото</h1>
+        <p class="muted small">Фото не покидает телефон: всё считается прямо в приложении.</p>
+        <ul class="tips small">
+          <li>Смотрите прямо в камеру, голова ровно.</li>
+          <li>Нейтральное выражение, рот закрыт.</li>
+          <li>Лоб и уши открыты, волосы убраны.</li>
+          <li>Ровный свет, без сильных теней.</li>
+        </ul>
+      </div>
+      <div class="drop" id="drop">
+        <div class="pad muted" id="drop-empty">Фото ещё не выбрано</div>
+        <img id="preview" alt="Выбранное фото" hidden>
+      </div>
+      <label class="btn block" id="pick">Выбрать фото<input type="file" id="file" accept="image/*"></label>
+      <button class="btn primary block" id="go" disabled>Начать разметку</button>
+    </div>
+  </section>
+
+  <!-- 2. POINTS -->
+  <section class="screen" id="s-points">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="zoom">
+        <button class="zbtn" id="zin" aria-label="Приблизить">+</button>
+        <button class="zbtn" id="zout" aria-label="Отдалить">−</button>
+        <button class="zbtn" id="zfit" aria-label="Показать всё фото" style="font-size:13px">1:1</button>
+      </div>
+    </div>
+    <div class="step">
+      <div class="prog"><i id="prog"></i></div>
+      <div class="step-head">
+        <h2 id="st-title">—</h2>
+        <span class="step-n" id="st-n"></span>
+      </div>
+      <div class="latin" id="st-latin"></div>
+      <div class="step-body">
+        <div class="step-desc" id="st-desc"></div>
+        <img class="diagram" id="st-img" alt="Схема точки">
+      </div>
+      <div class="row">
+        <button class="btn" id="back">Назад</button>
+        <button class="btn primary" id="next">Далее</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="all">Все точки</button>
+        <button class="btn" id="calc">Рассчитать</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. RESULT -->
+  <section class="screen" id="s-result">
+    <div class="wrap" id="res"></div>
+  </section>
+</main>
+
+<div class="sheet-bg" id="sheet-bg">
+  <div class="sheet" role="dialog" aria-label="Все точки">
+    <header><h2>Все точки <span class="muted small" id="sheet-count"></span></h2><button class="btn" id="sheet-close" style="min-height:38px;padding:6px 14px">Закрыть</button></header>
+    <div class="list" id="sheet-list"></div>
+    <div style="padding:8px 16px 12px"><button class="btn block" id="reset-all">Сбросить все точки</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ---------- Telegram ---------- */
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  try { tg.ready(); tg.expand(); tg.setHeaderColor('#ffffff'); tg.setBackgroundColor('#f4f7f8'); } catch (e) {}
+}
+const haptic = () => { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred('light'); } catch (e) {} };
+const $ = id => document.getElementById(id);
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2200); }
+function ask(msg) { return new Promise(res => { if (tg && tg.showConfirm) { try { tg.showConfirm(msg, res); return; } catch (e) {} } res(window.confirm(msg)); }); }
+
+/* ---------- 48 точек ---------- */
+const SIDES = {
+  L: { s: 'left',  S: 'Left',  Lat: 'Left',  M: 'Левый',  m: 'левый',  F: 'Левая',  g: 'левого',  f: 'левой',  A: 'левую' },
+  R: { s: 'right', S: 'Right', Lat: 'Right', M: 'Правый', m: 'правый', F: 'Правая', g: 'правого', f: 'правой', A: 'правую' }
+};
+const fill = (t, o) => t.replace(/\{(\w+)\}/g, (_, k) => o[k]);
+const one = (id, lat, title, desc) => [{ id, lat, title, desc }];
+const pair = tpls => ['L', 'R'].flatMap(k => tpls.map(t => ({
+  id: fill(t[0], SIDES[k]), lat: fill(t[1], SIDES[k]), title: fill(t[2], SIDES[k]), desc: fill(t[3], SIDES[k])
+})));
+
+const POINTS = [
+  ...one('hairline', 'Trichion', 'Линия роста волос', 'Найдите самую высокую точку линии роста волос на лбу, по центру (вид спереди).'),
+  ...pair([['{s}EyePupil', '{Lat} Pupilla', '{M} зрачок', 'Отметьте центр зрачка {g} глаза.']]),
+  ...pair([['nose{S}', '{Lat} Ala Nasi', '{F} сторона носа', 'Отметьте самую {A} точку носа в самой широкой части ноздрей.']]),
+  ...one('lowerLip', 'Labrale Inferius', 'Центр нижней губы', 'Отметьте центр нижней губы в её самой выступающей, самой полной части.'),
+  ...one('chinBottom', 'Menton', 'Низ подбородка', 'Найдите самую нижнюю точку подбородка между левой и правой точками подбородка.'),
+  ...pair([['{s}Temple', '{Lat} Temporal Point', '{M} висок', 'Отметьте самую широкую точку линии волос с {f} стороны, на полпути между линией роста волос и бровью.']]),
+  ...pair([
+    ['{s}EyeMedialCanthus', '{Lat} Canthus Medialis', 'Внутренний угол {g} глаза', 'Найдите внутренний угол {g} глаза.'],
+    ['{s}EyeLateralCanthus', '{Lat} Canthus Lateralis', 'Внешний угол {g} глаза', 'Найдите внешний угол {g} глаза, где сходятся веки.'],
+    ['{s}EyeUpperEyelid', '{Lat} Palpebra Superior', 'Верхнее веко {g} глаза', 'Найдите самую высокую точку верхнего века {g} глаза, над радужкой.'],
+    ['{s}EyeLowerEyelid', '{Lat} Palpebra Inferior', 'Нижнее веко {g} глаза', 'Найдите самую низкую точку нижнего века {g} глаза, под радужкой.'],
+    ['{s}BrowHead', '{Lat} Supercilium Medialis', 'Начало {f} брови', 'Найдите самую внутреннюю и самую высокую точку {f} брови, на краю, где заканчиваются волоски брови.'],
+    ['{s}BrowInnerCorner', '{Lat} Supercilium Medial Corner', 'Внутренний угол {f} брови', 'Найдите самую нижнюю точку на внутреннем краю {f} брови, где заканчиваются волоски брови.'],
+    ['{s}BrowArch', '{Lat} Supercilium Superior', 'Дуга {f} брови', 'Найдите самую высокую точку вдоль нижней стороны {f} брови, где бровь достигает пика.'],
+    ['{s}BrowPeak', '{Lat} Supercilium Apex', 'Пик {f} брови', 'Найдите самую приподнятую точку вдоль верхнего края {f} брови. Она может быть немного правее или левее дуги.'],
+    ['{s}BrowTail', '{Lat} Supercilium Lateralis', 'Хвост {f} брови', 'Найдите самую внешнюю точку {f} брови, где волоски сужаются к виску.'],
+    ['{s}UpperEyelidCrease', '{Lat} Pretarsal Skin Crease', 'Складка верхнего века {g} глаза', 'Найдите горизонтальную складку на верхнем веке {g} глаза: она видна при открытом глазе, выше линии ресниц. Если верхнее веко не видно, точка может совпадать с точкой верхнего века.']
+  ]),
+  ...one('nasalBase', 'Nasal Base', 'Основание носа', 'Найдите основание носа там, где заканчивается нижняя часть ноздри, обычно справа от кончика носа.'),
+  ...one('noseBottom', 'Subnasale', 'Подносовая точка', 'Найдите самую нижнюю точку кончика носа, примерно посередине носа.'),
+  ...pair([['{s}NoseBridge', '{Lat} Dorsum Nasi', '{M} край спинки носа', 'Найдите {m} край переносицы, где она переходит от носовой кости к коже лица, обычно примерно на середине носа.']]),
+  ...pair([['mouth{S}', '{Lat} Cheilion', '{M} уголок рта', 'Отметьте самый {m} уголок рта, где заканчивается граница губ.']]),
+  ...one('cupidsBow', 'Labrale Superius', 'Пик купидонова лука', 'Найдите самую высокую точку верхней губы, обычно справа или слева от центра.'),
+  ...one('innerCupidsBow', "Cupid's Bow", 'Центр купидонова лука', 'Отметьте центральную впадину между двумя пиками купидонова лука, на красной кайме верхней губы.'),
+  ...one('mouthMiddle', 'Mouth Middle', 'Центр рта', 'Найдите центральную точку рта, где смыкаются верхняя и нижняя губы.'),
+  ...pair([['{s}TopGonion', '{Lat} Gonion Superior', 'Верхний угол {f} челюсти', 'Найдите верхнюю часть угла {f} челюсти, где он начинает изгибаться. Обычно это самая выступающая точка на уровне рта.']]),
+  ...pair([['{s}BottomGonion', '{Lat} Gonion Inferior', 'Нижний угол {f} челюсти', 'Найдите нижнюю часть угла {f} челюсти, ниже верхнего угла, там, где челюсть изгибается к подбородку.']]),
+  ...pair([['chin{S}', '{Lat} Mentum Lateralis', '{F} сторона подбородка', 'Отметьте {A} сторону подбородка, где подбородок начинает изгибаться и образует угол.']]),
+  ...pair([['neck{S}', '{Lat} Cervical Lateralis', '{F} точка шеи', 'Отметьте самую широкую точку {f} стороны шеи, обычно сразу под линией челюсти.']]),
+  ...pair([['{s}Cheek', '{Lat} Zygion', '{F} скула', 'Найдите наиболее выступающую вбок точку {f} скулы, обычно это самая широкая часть средней трети лица.']])
+];
+const N = POINTS.length; // 48
+const IDX = Object.fromEntries(POINTS.map((p, i) => [p.id, i]));
+
+/* ---------- Метрики ---------- */
+const rad = 180 / Math.PI;
+const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const dxx = (a, b) => Math.abs(a.x - b.x);
+const dyy = (a, b) => Math.abs(a.y - b.y);
+const mid = (...a) => ({ x: a.reduce((s, p) => s + p.x, 0) / a.length, y: a.reduce((s, p) => s + p.y, 0) / a.length });
+function angleAt(v, a, b) {
+  const ax = a.x - v.x, ay = a.y - v.y, bx = b.x - v.x, by = b.y - v.y;
+  const c = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by));
+  return Math.acos(Math.max(-1, Math.min(1, c))) * rad;
+}
+const W = p => dxx(p.leftCheek, p.rightCheek);
+const PM = p => mid(p.leftEyePupil, p.rightEyePupil);
+const GL = p => mid(p.leftBrowHead, p.rightBrowHead, p.leftBrowInnerCorner, p.rightBrowInnerCorner);
+const ew = (p, s) => d(p[s + 'EyeMedialCanthus'], p[s + 'EyeLateralCanthus']);
+const ewAvg = p => (ew(p, 'left') + ew(p, 'right')) / 2;
+const nose = p => dxx(p.noseLeft, p.noseRight);
+const ICD = p => dxx(p.leftEyeMedialCanthus, p.rightEyeMedialCanthus);
+const H = p => dyy(p.hairline, p.chinBottom);
+const canthal = p => ['left', 'right'].map(s => {
+  const m = p[s + 'EyeMedialCanthus'], l = p[s + 'EyeLateralCanthus'];
+  return Math.atan2(m.y - l.y, Math.abs(l.x - m.x)) * rad;
+}).reduce((a, b) => a + b) / 2;
+const browTilt = p => ['left', 'right'].map(s => angleAt(p[s + 'BrowInnerCorner'], p[s + 'BrowArch'], p[s + 'BrowTail'])).reduce((a, b) => a + b) / 2;
+const iaa = p => angleAt(p.noseBottom, p.rightEyeLateralCanthus, p.leftEyeLateralCanthus);
+const jfa = p => {
+  const u1 = { x: p.chinLeft.x - p.leftBottomGonion.x, y: p.chinLeft.y - p.leftBottomGonion.y };
+  const u2 = { x: p.chinRight.x - p.rightBottomGonion.x, y: p.chinRight.y - p.rightBottomGonion.y };
+  return angleAt({ x: 0, y: 0 }, u1, u2);
+};
+const bitemp = p => dxx(p.leftTemple, p.rightTemple) / W(p) * 100;
+const bigon = p => dxx(p.leftBottomGonion, p.rightBottomGonion) / W(p) * 100;
+
+const PUP = ['leftEyePupil', 'rightEyePupil'], CHK = ['leftCheek', 'rightCheek'];
+const BR4 = ['leftBrowHead', 'rightBrowHead', 'leftBrowInnerCorner', 'rightBrowInnerCorner'];
+const EYE = s => [s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'];
+const EYES = [...EYE('left'), ...EYE('right')];
+const NOSE = ['noseLeft', 'noseRight'];
+const MOUTH = ['mouthLeft', 'mouthRight'];
+const GON = ['leftTopGonion', 'rightTopGonion'];
+
+// w — вес метрики (в формуле штрафов). Сейчас все = 1; поменяйте при необходимости.
+const METRICS = [
+  { k: 'fwhr', n: 'FWHR', min: 1.9, max: 2.06, u: 'x', dp: 2, w: 1, need: [...CHK, 'innerCupidsBow', ...BR4],
+    f: p => W(p) / dyy(p.innerCupidsBow, GL(p)), h: 'Ширина скул / высота от центра купидонова лука до глабеллы (между бровями).' },
+  { k: 'tfwhr', n: 'Total FWHR', min: 1.33, max: 1.38, u: 'x', dp: 2, w: 1, need: [...CHK, 'hairline', 'chinBottom'],
+    f: p => H(p) / W(p), h: 'Высота лица (линия роста волос – низ подбородка) / ширина скул.' },
+  { k: 'mfr', n: 'Midface ratio (MFR)', min: 0.95, max: 1.01, u: 'x', dp: 2, w: 1, need: [...PUP, 'innerCupidsBow'],
+    f: p => dxx(p.leftEyePupil, p.rightEyePupil) / dyy(PM(p), p.innerCupidsBow), h: 'Расстояние между зрачками / высота от линии зрачков до центра купидонова лука.' },
+  { k: 'jaw', n: 'Jaw width', min: 0.9, max: 1, u: 'x', dp: 2, w: 1, need: [...GON, ...CHK],
+    f: p => dxx(p.leftTopGonion, p.rightTopGonion) / W(p), h: 'Ширина между верхними углами челюсти / ширина скул.' },
+  { k: 'bigon', n: 'Bigonial width', min: 85.5, max: 92, u: '%', dp: 1, w: 1, need: ['leftBottomGonion', 'rightBottomGonion', ...CHK],
+    f: bigon, h: 'Ширина между нижними углами челюсти / ширина скул.' },
+  { k: 'neck', n: 'Neck width', min: 90, max: 98, u: '%', dp: 1, w: 1, need: ['neckLeft', 'neckRight', ...GON],
+    f: p => dxx(p.neckLeft, p.neckRight) / dxx(p.leftTopGonion, p.rightTopGonion) * 100, h: 'Ширина шеи / ширина между верхними углами челюсти.' },
+  { k: 'cant', n: 'Canthal tilt', min: 5, max: 9, u: '°', dp: 1, w: 1, need: EYES,
+    f: canthal, h: 'Наклон линии от внутреннего угла глаза к внешнему относительно горизонтали (среднее по двум глазам).' },
+  { k: 'esr', n: 'Eye spacing ratio (ESR)', min: 44.3, max: 47.3, u: '%', dp: 1, w: 1, need: [...PUP, ...CHK],
+    f: p => dxx(p.leftEyePupil, p.rightEyePupil) / W(p) * 100, h: 'Расстояние между зрачками / ширина скул.' },
+  { k: 'es', n: 'One eye apart (ES)', min: 0.93, max: 1.04, u: 'x', dp: 2, w: 1, need: EYES,
+    f: p => ICD(p) / ewAvg(p), h: 'Расстояние между внутренними углами глаз / ширина глаза.' },
+  { k: 'icd', n: 'Inner canthal distance', min: 25.5, max: 28, u: '%', dp: 1, w: 1, need: [...EYES, ...CHK],
+    f: p => ICD(p) / W(p) * 100, h: 'Расстояние между внутренними углами глаз / ширина скул.' },
+  { k: 'ocd', n: 'Outer canthal distance', min: 0.63, max: 0.67, u: 'x', dp: 2, w: 1, need: [...EYES, ...CHK],
+    f: p => dxx(p.leftEyeLateralCanthus, p.rightEyeLateralCanthus) / W(p), h: 'Расстояние между внешними углами глаз / ширина скул.' },
+  { k: 'mca', n: 'Medial canthal angle', min: 20, max: 42, u: '°', dp: 1, w: 1, need: [...EYES, 'leftUpperEyelidCrease', 'rightUpperEyelidCrease'],
+    f: p => ['left', 'right'].map(s => {
+      const m = p[s + 'EyeMedialCanthus'], l = p[s + 'EyeLateralCanthus'], c = p[s + 'UpperEyelidCrease'];
+      const dir = Math.sign(l.x - m.x) || 1;
+      return Math.atan2(m.y - c.y, (c.x - m.x) * dir) * rad;
+    }).reduce((a, b) => a + b) / 2, h: 'Угол между линией «внутренний угол глаза – складка верхнего века» и горизонталью.' },
+  { k: 'ear', n: 'Eye aspect ratio (EAR)', min: 3, max: 3.5, u: 'x', dp: 2, w: 1, need: [...EYES, 'leftEyeUpperEyelid', 'leftEyeLowerEyelid', 'rightEyeUpperEyelid', 'rightEyeLowerEyelid'],
+    f: p => ['left', 'right'].map(s => ew(p, s) / d(p[s + 'EyeUpperEyelid'], p[s + 'EyeLowerEyelid'])).reduce((a, b) => a + b) / 2, h: 'Ширина глаза / высота глаза (от верхнего до нижнего века).' },
+  { k: 'l3', n: 'Lower third', min: 30.6, max: 34, u: '%', dp: 1, w: 1, need: ['noseBottom', 'chinBottom', 'hairline'],
+    f: p => dyy(p.noseBottom, p.chinBottom) / H(p) * 100, h: 'Нижняя треть (подносовая точка – низ подбородка) от всей высоты лица.' },
+  { k: 'cbh', n: 'Cheekbone height', min: 81, max: 100, u: '%', dp: 1, w: 1, need: [...PUP, ...CHK, 'innerCupidsBow'],
+    f: p => dyy(mid(p.leftCheek, p.rightCheek), p.innerCupidsBow) / dyy(PM(p), p.innerCupidsBow) * 100, h: 'Вертикаль от линии скул до купидонова лука / вертикаль от линии зрачков до купидонова лука.' },
+  { k: 'cph', n: 'Chin to philtrum', min: 2.05, max: 2.55, u: 'x', dp: 2, w: 1, need: ['lowerLip', 'chinBottom', 'innerCupidsBow', 'noseBottom'],
+    f: p => dyy(p.lowerLip, p.chinBottom) / dyy(p.innerCupidsBow, p.noseBottom), h: 'Высота подбородка (центр нижней губы – низ подбородка) / высота фильтрума (купидонов лук – подносовая точка).' },
+  { k: 'lip', n: 'Lower lip to upper lip', min: 1.4, max: 1.7, u: 'x', dp: 2, w: 1, need: ['innerCupidsBow', 'mouthMiddle', 'lowerLip'],
+    f: p => dyy(p.mouthMiddle, p.lowerLip) / dyy(p.innerCupidsBow, p.mouthMiddle), h: 'Высота нижней губы / высота верхней (граница – горизонталь через центр рта).' },
+  { k: 'nm', n: 'Nose to mouth width', min: 1.38, max: 1.53, u: 'x', dp: 2, w: 1, need: [...NOSE, ...MOUTH],
+    f: p => dxx(p.mouthLeft, p.mouthRight) / nose(p), h: 'Ширина рта / ширина носа (диапазон 1.38–1.53 соответствует именно такому порядку).' },
+  { k: 'nz', n: 'Nose to zygo', min: 0.2, max: 0.3, u: 'x', dp: 2, w: 1, need: [...NOSE, ...CHK],
+    f: p => nose(p) / W(p), h: 'Ширина носа / ширина скул.' },
+  { k: 'nicd', n: 'Nose width to ICD', min: 0.86, max: 0.94, u: 'x', dp: 2, w: 1, need: [...NOSE, ...EYES],
+    f: p => nose(p) / ICD(p), h: 'Ширина носа / расстояние между внутренними углами глаз.' },
+  { k: 'nwh', n: 'Nose width to height', min: 0.66, max: 0.85, u: 'x', dp: 2, w: 1, need: [...NOSE, ...PUP, 'noseBottom'],
+    f: p => nose(p) / dyy(PM(p), p.noseBottom), h: 'Ширина носа / высота от линии зрачков до подносовой точки.' },
+  { k: 'iaa', n: 'Ipsilateral alar angle', min: 85, max: 95, u: '°', dp: 1, w: 1, need: ['noseBottom', 'leftEyeLateralCanthus', 'rightEyeLateralCanthus'],
+    f: iaa, h: 'Угол в подносовой точке между направлениями на внешние углы обоих глаз.' },
+  { k: 'eme', n: 'Eye mouth eye', min: 47, max: 50, u: '°', dp: 1, w: 1, need: ['mouthMiddle', ...PUP],
+    f: p => angleAt(p.mouthMiddle, p.leftEyePupil, p.rightEyePupil), h: 'Угол в центре рта между направлениями на левый и правый зрачки.' },
+  { k: 'nc', n: 'Nose to chin', min: 0.96, max: 1.03, u: 'x', dp: 2, w: 1, need: [...NOSE, 'chinLeft', 'chinRight'],
+    f: p => nose(p) / dxx(p.chinLeft, p.chinRight), h: 'Ширина носа / ширина подбородка.' },
+  { k: 't1', n: 'Top third', min: 30, max: 32, u: '%', dp: 1, w: 1, need: ['hairline', 'chinBottom', ...BR4],
+    f: p => dyy(p.hairline, GL(p)) / H(p) * 100, h: 'Верхняя треть (линия роста волос – глабелла) от высоты лица.' },
+  { k: 't2', n: 'Middle third', min: 31.4, max: 33.4, u: '%', dp: 1, w: 1, need: ['hairline', 'chinBottom', 'noseBottom', ...BR4],
+    f: p => dyy(GL(p), p.noseBottom) / H(p) * 100, h: 'Средняя треть (глабелла – подносовая точка) от высоты лица.' },
+  { k: 't3', n: 'Lower third (thirds)', min: 33.9, max: 37, u: '%', dp: 1, w: 1, need: ['hairline', 'chinBottom', 'noseBottom'],
+    f: p => dyy(p.noseBottom, p.chinBottom) / H(p) * 100, h: 'Нижняя треть (подносовая точка – низ подбородка) от высоты лица.' },
+  { k: 'bt', n: 'Bitemporal', min: 84, max: 95, u: '%', dp: 1, w: 1, need: ['leftTemple', 'rightTemple', ...CHK],
+    f: bitemp, h: 'Расстояние между висками / ширина скул.' },
+  { k: 'jfa', n: 'Jaw frontal angle', min: 84.5, max: 95, u: '°', dp: 1, w: 1, need: ['leftBottomGonion', 'rightBottomGonion', 'chinLeft', 'chinRight'],
+    f: jfa, h: 'Угол, под которым линии «нижний угол челюсти – край подбородка» сходятся друг с другом.' },
+  { k: 'iajf', n: 'IAA–JFA deviation', min: 0, max: 2.5, u: '°', dp: 1, w: 1, need: ['noseBottom', 'leftEyeLateralCanthus', 'rightEyeLateralCanthus', 'leftBottomGonion', 'rightBottomGonion', 'chinLeft', 'chinRight'],
+    f: p => Math.abs(iaa(p) - jfa(p)), h: 'Разница между ipsilateral alar angle и jaw frontal angle.' },
+  { k: 'bt2', n: 'Eyebrow tilt', min: 5, max: 13, u: '°', dp: 1, w: 1, need: ['leftBrowInnerCorner', 'leftBrowArch', 'leftBrowTail', 'rightBrowInnerCorner', 'rightBrowArch', 'rightBrowTail'],
+    f: browTilt, h: 'Угол при внутреннем углу брови между направлениями на дугу и на хвост брови.' },
+  { k: 'gs', n: 'Jaw gonial slope', min: 140, max: 142.5, u: '°', dp: 1, w: 1, need: ['leftCheek', 'rightCheek', ...GON, 'chinLeft', 'chinRight'],
+    f: p => (angleAt(p.leftTopGonion, p.leftCheek, p.chinLeft) + angleAt(p.rightTopGonion, p.rightCheek, p.chinRight)) / 2, h: 'Угол при верхнем углу челюсти между направлениями на скулу и на край подбородка (среднее по двум сторонам).' },
+  { k: 'l3p', n: 'Lower third proportions', min: 31, max: 33.5, u: '%', dp: 1, w: 1, need: ['noseBottom', 'mouthMiddle', 'chinBottom'],
+    f: p => dyy(p.noseBottom, p.mouthMiddle) / dyy(p.noseBottom, p.chinBottom) * 100, h: 'Высота от подносовой точки до центра рта / высота от подносовой точки до низа подбородка.' },
+  { k: 'jwhr', n: 'Jaw width to height (JWHR)', min: 1.85, max: 1.95, u: 'x', dp: 2, w: 1, need: [...GON, 'noseBottom', 'chinBottom'],
+    f: p => dxx(p.leftTopGonion, p.rightTopGonion) / dyy(p.noseBottom, p.chinBottom), h: 'Ширина между верхними углами челюсти / высота от подносовой точки до низа подбородка.' },
+  { k: 'ab', n: 'Alar to bridge', min: 2, max: 2.1, u: 'x', dp: 2, w: 1, need: [...NOSE, 'leftNoseBridge', 'rightNoseBridge'],
+    f: p => nose(p) / dxx(p.leftNoseBridge, p.rightNoseBridge), h: 'Ширина носа / ширина спинки носа.' },
+  { k: 'fh', n: 'Forehead width to height', min: 44, max: 50, u: '%', dp: 1, w: 1, need: ['leftTemple', 'rightTemple', 'hairline', ...BR4],
+    f: p => dyy(GL(p), p.hairline) / dxx(p.leftTemple, p.rightTemple) * 100, h: 'Высота лба (глабелла – линия роста волос) / ширина лба между висками (диапазон 44–50% соответствует именно такому порядку).' },
+  { k: 'bs', n: 'Eyebrow setness', min: 88, max: 98, u: '%', dp: 1, w: 1, need: [...PUP, 'leftBrowInnerCorner', 'rightBrowInnerCorner', 'innerCupidsBow'],
+    f: p => dyy(PM(p), p.innerCupidsBow) / dyy(mid(p.leftBrowInnerCorner, p.rightBrowInnerCorner), p.innerCupidsBow) * 100, h: 'Вертикаль от линии зрачков до купидонова лука / вертикаль от линии внутренних углов бровей до купидонова лука.' },
+  { k: 'bl', n: 'Brow length to face width', min: 69, max: 79, u: '%', dp: 1, w: 1, need: ['leftBrowInnerCorner', 'leftBrowTail', 'rightBrowInnerCorner', 'rightBrowTail', ...CHK],
+    f: p => (d(p.leftBrowInnerCorner, p.leftBrowTail) + d(p.rightBrowInnerCorner, p.rightBrowTail)) / W(p) * 100, h: 'Сумма длин обеих бровей (внутренний угол – хвост) / ширина скул.' },
+  { k: 'dct', n: 'Canthal / eyebrow tilt deviation', min: 0, max: 3, u: '°', dp: 1, w: 1, need: [...EYES, 'leftBrowInnerCorner', 'leftBrowArch', 'leftBrowTail', 'rightBrowInnerCorner', 'rightBrowArch', 'rightBrowTail'],
+    f: p => Math.abs(canthal(p) - browTilt(p)), h: 'Разница между наклоном глаз и наклоном бровей.' },
+  { k: 'mar', n: 'Mouth aspect ratio (MAR)', min: 3, max: 3.5, u: 'x', dp: 2, w: 1, need: [...MOUTH, 'cupidsBow', 'lowerLip'],
+    f: p => dxx(p.mouthLeft, p.mouthRight) / dyy(p.cupidsBow, p.lowerLip), h: 'Ширина рта / высота губ (пик купидонова лука – нижняя губа).' },
+  { k: 'dbb', n: 'Bitemporal / bigonial deviation', min: 0, max: 4, u: '%', dp: 1, w: 1, need: ['leftTemple', 'rightTemple', 'leftBottomGonion', 'rightBottomGonion', ...CHK],
+    f: p => Math.abs(bitemp(p) - bigon(p)), h: 'Разница между bitemporal и bigonial (в процентных пунктах).' },
+  { k: 'pfl', n: 'PFL to biozygo', min: 19.5, max: 21.5, u: '%', dp: 1, w: 1, need: [...EYES, ...CHK],
+    f: p => ewAvg(p) / W(p) * 100, h: 'Ширина глаза / ширина скул.' }
+];
+
+/* ---------- Расчёт ---------- */
+const deviation = (v, m) => v < m.min ? (m.min - v) / m.min : v > m.max ? (v - m.max) / m.max : 0;
+const tierOf = dev => { const x = dev * 100; return x <= 5 ? 1 : x <= 10 ? 2 : x <= 20 ? 3 : x <= 35 ? 4 : x <= 50 ? 5 : 6; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function level(pts) {
+  // выравниваем по линии зрачков, чтобы «горизонталь» и «вертикаль» были настоящими
+  const a = pts.leftEyePupil, b = pts.rightEyePupil;
+  if (!a || !b) return pts;
+  const [p1, p2] = a.x <= b.x ? [a, b] : [b, a];
+  const r = Math.atan2(p2.y - p1.y, p2.x - p1.x), c = Math.cos(-r), s = Math.sin(-r);
+  const out = {};
+  for (const k in pts) out[k] = { x: pts[k].x * c - pts[k].y * s, y: pts[k].x * s + pts[k].y * c };
+  return out;
+}
+
+function analyze(pts) {
+  const p = level(pts);
+  const rows = [], skipped = [];
+  for (const m of METRICS) {
+    if (!m.need.every(id => p[id])) { skipped.push(m); continue; }
+    let v;
+    try { v = m.f(p); } catch (e) { v = NaN; }
+    if (!isFinite(v)) { skipped.push(m); continue; }
+    const dev = deviation(v, m);
+    rows.push({ m, v, dev, tier: tierOf(dev), score: clamp(10 - dev * 20, 0, 10) });
+  }
+  return { rows, skipped };
+}
+
+function harmony(rows, mode) {
+  if (!rows.length) return null;
+  if (mode === 'pen') {
+    let sw = 0, sp = 0;
+    for (const r of rows) { sw += r.m.w; sp += (r.dev < 0.05 ? 0 : r.dev) * r.m.w; }
+    return clamp(10 - (sp / sw) * 25, 0, 10);
+  }
+  const avg = rows.reduce((s, r) => s + r.tier, 0) / rows.length;
+  const max = Math.max(...rows.map(r => r.tier));
+  return clamp(10 - ((avg - 1) * 1.2 + (max - 1) * 0.8), 0, 10);
+}
+const label = s => s >= 9 ? 'Отличная гармония' : s >= 8 ? 'Очень хорошая гармония' : s >= 7 ? 'Хорошая гармония' : s >= 5.5 ? 'Средняя гармония' : 'Ниже среднего';
+
+/* ---------- Состояние ---------- */
+let IMG = null, iw = 0, ih = 0;
+const pts = {};            // id -> {x,y} в пикселях изображения
+let step = 0, mode = 'pen', showDots = false, lastAnalysis = null;
+const KEY = 'faceharmony.points.v1';
+const placed = () => POINTS.filter(p => pts[p.id]).length;
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ w: iw, h: ih, pts })); } catch (e) {} }
+
+/* ---------- Навигация ---------- */
+function show(name) {
+  for (const n of ['photo', 'points', 'result']) {
+    $('s-' + n).classList.toggle('on', n === name);
+    $('t-' + n).setAttribute('aria-selected', n === name);
+  }
+  if (name === 'points') { requestAnimationFrame(() => { resize(); if (!view.ready) fitView(); draw(); }); }
+}
+$('t-photo').onclick = () => show('photo');
+$('t-points').onclick = () => show('points');
+$('t-result').onclick = () => show('result');
+
+/* ---------- Фото ---------- */
+$('file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  const im = new Image();
+  im.onload = async () => {
+    const max = 2000, sc = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(im.naturalWidth * sc); c.height = Math.round(im.naturalHeight * sc);
+    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    IMG = c; iw = c.width; ih = c.height;
+    $('preview').src = url; $('preview').hidden = false; $('drop-empty').hidden = true;
+    for (const k in pts) delete pts[k];
+    step = 0; view.ready = false; lastAnalysis = null;
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (s && s.w === iw && s.h === ih && s.pts && Object.keys(s.pts).length) {
+        if (await ask('Найдена сохранённая разметка для фото такого же размера. Продолжить с ней?')) {
+          Object.assign(pts, s.pts);
+          const nx = POINTS.findIndex(p => !pts[p.id]); step = nx < 0 ? N - 1 : nx;
+        }
+      }
+    } catch (err) {}
+    $('go').disabled = false; $('t-points').disabled = false; $('t-result').disabled = true;
+    renderCard();
+  };
+  im.onerror = () => toast('Не удалось открыть фото');
+  im.src = url;
+});
+$('go').onclick = () => show('points');
+
+/* ---------- Холст разметки ---------- */
+const cv = $('cv'), ctx = cv.getContext('2d');
+const view = { s: 1, tx: 0, ty: 0, ready: false, s0: 1 };
+let cw = 0, ch = 0, dpr = 1;
+function resize() {
+  const r = $('stage').getBoundingClientRect();
+  dpr = window.devicePixelRatio || 1;
+  cw = r.width; ch = r.height;
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+}
+new ResizeObserver(() => { if ($('s-points').classList.contains('on')) { const was = view.ready; resize(); if (was) clampView(); else if (IMG) fitView(); draw(); } }).observe($('stage'));
+
+function fitView() {
+  if (!IMG || !cw) return;
+  view.s0 = Math.min(cw / iw, ch / ih);
+  view.s = view.s0; view.tx = (cw - iw * view.s) / 2; view.ty = (ch - ih * view.s) / 2; view.ready = true;
+}
+function clampView() {
+  view.s = clamp(view.s, view.s0, view.s0 * 10);
+  const mx = cw * 0.3, my = ch * 0.3;
+  const w = iw * view.s, h = ih * view.s;
+  view.tx = w < cw ? (cw - w) / 2 : clamp(view.tx, cw - w - mx, mx);
+  view.ty = h < ch ? (ch - h) / 2 : clamp(view.ty, ch - h - my, my);
+}
+const toScreen = p => ({ x: p.x * view.s + view.tx, y: p.y * view.s + view.ty });
+const toImage = q => ({ x: (q.x - view.tx) / view.s, y: (q.y - view.ty) / view.s });
+function zoomAt(f, cx, cy) {
+  const ip = toImage({ x: cx, y: cy });
+  view.s = clamp(view.s * f, view.s0, view.s0 * 10);
+  view.tx = cx - ip.x * view.s; view.ty = cy - ip.y * view.s;
+  clampView(); draw();
+}
+$('zin').onclick = () => zoomAt(1.5, cw / 2, ch / 2);
+$('zout').onclick = () => zoomAt(1 / 1.5, cw / 2, ch / 2);
+$('zfit').onclick = () => { fitView(); draw(); };
+cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+
+function draw() {
+  if (!IMG) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0f1e22'; ctx.fillRect(0, 0, cw, ch);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.save(); ctx.translate(view.tx, view.ty); ctx.scale(view.s, view.s); ctx.drawImage(IMG, 0, 0); ctx.restore();
+  POINTS.forEach((P, i) => {
+    const p = pts[P.id]; if (!p) return;
+    const q = toScreen(p), cur = i === step;
+    ctx.beginPath(); ctx.arc(q.x, q.y, cur ? 7 : 4, 0, 7);
+    ctx.fillStyle = cur ? 'rgba(240,160,106,.35)' : 'rgba(31,100,117,.9)'; ctx.fill();
+    ctx.lineWidth = cur ? 2 : 1.5; ctx.strokeStyle = cur ? '#f0a06a' : '#fff'; ctx.stroke();
+    if (cur) { ctx.fillStyle = '#fff'; ctx.font = '700 12px Manrope, sans-serif'; ctx.fillText(String(i + 1), q.x + 10, q.y - 8); }
+  });
+  if (drag) drawLoupe();
+}
+function drawLoupe() {
+  const p = pts[POINTS[drag.i].id]; if (!p) return;
+  const q = toScreen(p), R = 56;
+  const lx = q.x < cw / 2 ? cw - R - 12 : R + 12, ly = R + 12, z = view.s * 2.5;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(lx, ly, R, 0, 7); ctx.clip();
+  ctx.fillStyle = '#000'; ctx.fillRect(lx - R, ly - R, 2 * R, 2 * R);
+  ctx.translate(lx - p.x * z, ly - p.y * z); ctx.scale(z, z); ctx.drawImage(IMG, 0, 0);
+  ctx.restore();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,.95)';
+  ctx.beginPath(); ctx.moveTo(lx - R + 6, ly); ctx.lineTo(lx + R - 6, ly); ctx.moveTo(lx, ly - R + 6); ctx.lineTo(lx, ly + R - 6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(lx, ly, R, 0, 7); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(lx, ly, 3, 0, 7); ctx.strokeStyle = '#f0a06a'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+/* один палец — поставить/двигать точку (с лупой), два пальца — масштаб и сдвиг */
+const ptrs = new Map(); let drag = null, gest = null, locked = false;
+const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const inImg = p => ({ x: clamp(p.x, 0, iw), y: clamp(p.y, 0, ih) });
+
+cv.addEventListener('pointerdown', e => {
+  if (!IMG) return;
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, pos(e));
+  if (ptrs.size === 1 && !locked) {
+    const sp = pos(e); let best = -1, bd = 28;
+    POINTS.forEach((P, i) => { const p = pts[P.id]; if (!p) return; const q = toScreen(p), dd = Math.hypot(q.x - sp.x, q.y - sp.y); if (dd < bd) { bd = dd; best = i; } });
+    if (best >= 0) { const q = toScreen(pts[POINTS[best].id]); drag = { i: best, ox: q.x - sp.x, oy: q.y - sp.y, placed: false, moved: false }; step = best; renderCard(); }
+    else { pts[POINTS[step].id] = inImg(toImage(sp)); drag = { i: step, ox: 0, oy: 0, placed: true, moved: true }; }
+  } else if (ptrs.size === 2) {
+    drag = null; locked = true;
+    const [a, b] = [...ptrs.values()];
+    gest = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, s0: view.s, tx0: view.tx, ty0: view.ty };
+  }
+  draw();
+});
+cv.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, pos(e));
+  if (ptrs.size >= 2 && gest) {
+    const [a, b] = [...ptrs.values()];
+    const dd = Math.hypot(a.x - b.x, a.y - b.y), m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const ip = { x: (gest.m0.x - gest.tx0) / gest.s0, y: (gest.m0.y - gest.ty0) / gest.s0 };
+    view.s = clamp(gest.s0 * dd / gest.d0, view.s0, view.s0 * 10);
+    view.tx = m.x - ip.x * view.s; view.ty = m.y - ip.y * view.s;
+    clampView(); draw();
+  } else if (drag) {
+    const sp = pos(e);
+    pts[POINTS[drag.i].id] = inImg(toImage({ x: sp.x + drag.ox, y: sp.y + drag.oy }));
+    drag.moved = true; draw();
+  }
+});
+function up(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  if (drag) {
+    if (drag.moved) { haptic(); save(); }
+    if (drag.placed && step < N - 1) step++;
+    drag = null; renderCard();
+  }
+  if (ptrs.size < 2) gest = null;
+  if (ptrs.size === 0) locked = false;
+  draw();
+}
+cv.addEventListener('pointerup', up);
+cv.addEventListener('pointercancel', up);
+
+/* ---------- Карточка шага ---------- */
+function renderCard() {
+  const P = POINTS[step], n = placed();
+  $('st-title').textContent = P.title;
+  $('st-latin').textContent = P.lat;
+  $('st-desc').textContent = P.desc;
+  $('st-n').textContent = (step + 1) + ' из ' + N;
+  $('prog').style.width = (n / N * 100) + '%';
+  const img = $('st-img'); img.classList.remove('ok', 'big');
+  img.onload = () => img.classList.add('ok'); img.onerror = () => img.classList.remove('ok');
+  img.src = 'points/' + P.id + '.webp';
+  $('back').disabled = step === 0;
+  $('next').textContent = pts[P.id] ? (step === N - 1 ? 'Готово' : 'Далее') : 'Пропустить';
+  $('all').textContent = 'Все точки (' + n + '/' + N + ')';
+  $('t-result').disabled = n === 0;
+  if (pts[P.id] && view.ready) focusPoint(pts[P.id]);
+  draw();
+}
+function focusPoint(p) {
+  const q = toScreen(p);
+  if (q.x < 30 || q.y < 30 || q.x > cw - 30 || q.y > ch - 30) { view.tx += cw / 2 - q.x; view.ty += ch / 2 - q.y; clampView(); }
+}
+$('st-img').onclick = e => e.currentTarget.classList.toggle('big');
+$('back').onclick = () => { if (step > 0) { step--; renderCard(); } };
+$('next').onclick = () => { if (step < N - 1) { step++; renderCard(); } else toast('Это последняя точка'); };
+
+/* ---------- Список точек ---------- */
+function openSheet() {
+  const box = $('sheet-list'); box.textContent = '';
+  POINTS.forEach((P, i) => {
+    const b = document.createElement('button');
+    b.className = 'li' + (pts[P.id] ? ' done' : '') + (i === step ? ' cur' : '');
+    b.innerHTML = '<span class="no"></span><span class="t"></span><span class="ck">' + (pts[P.id] ? '✓' : '') + '</span>';
+    b.children[0].textContent = i + 1; b.children[1].textContent = P.title;
+    b.onclick = () => { step = i; closeSheet(); renderCard(); };
+    box.appendChild(b);
+  });
+  $('sheet-count').textContent = placed() + '/' + N;
+  $('sheet-bg').classList.add('on');
+  const cur = box.querySelector('.cur'); if (cur) cur.scrollIntoView({ block: 'center' });
+}
+const closeSheet = () => $('sheet-bg').classList.remove('on');
+$('all').onclick = openSheet;
+$('sheet-close').onclick = closeSheet;
+$('sheet-bg').addEventListener('click', e => { if (e.target === $('sheet-bg')) closeSheet(); });
+$('reset-all').onclick = async () => {
+  if (!(await ask('Удалить все поставленные точки?'))) return;
+  for (const k in pts) delete pts[k];
+  step = 0; save(); closeSheet(); renderCard();
+};
+
+/* ---------- Результат ---------- */
+$('calc').onclick = () => {
+  if (placed() < 2) { toast('Поставьте хотя бы несколько точек'); return; }
+  lastAnalysis = analyze(pts);
+  if (!lastAnalysis.rows.length) { toast('Не хватает точек: пока нельзя посчитать ни одной метрики'); return; }
+  renderResult(); show('result');
+};
+
+function heroCrop() {
+  const xs = [], ys = [];
+  for (const k in pts) { xs.push(pts[k].x); ys.push(pts[k].y); }
+  if (xs.length < 4) return { x: 0, y: 0, w: iw, h: ih };
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  let h = Math.max((y1 - y0) * 1.45, (x1 - x0) * 1.45 * 1.25), w = h * 0.8;
+  h = Math.min(h, ih); w = Math.min(w, iw); if (w / h > 0.8) w = h * 0.8; else h = w / 0.8;
+  return { x: clamp(cx - w / 2, 0, iw - w), y: clamp(cy - h / 2, 0, ih - h), w, h };
+}
+function drawHero() {
+  const c = $('hero-cv'); if (!c) return;
+  const r = c.getBoundingClientRect(), k = window.devicePixelRatio || 1;
+  c.width = Math.round(r.width * k); c.height = Math.round(r.height * k);
+  const g = c.getContext('2d'), cr = heroCrop(), s = c.width / cr.w;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(IMG, cr.x, cr.y, cr.w, cr.h, 0, 0, c.width, c.height);
+  if (showDots) {
+    g.fillStyle = 'rgba(255,255,255,.95)'; g.strokeStyle = 'rgba(31,100,117,.95)'; g.lineWidth = 1.5 * k;
+    for (const kk in pts) { g.beginPath(); g.arc((pts[kk].x - cr.x) * s, (pts[kk].y - cr.y) * s, 2.6 * k, 0, 7); g.fill(); g.stroke(); }
+  }
+}
+function fmt(v, m) { return v.toFixed(m.dp) + (m.u === 'x' ? 'x' : m.u); }
+function barPos(v, m) { return clamp(30 + (v - m.min) / (m.max - m.min) * 40, 3, 97); }
+
+function renderResult() {
+  const A = lastAnalysis, box = $('res'); if (!A) return;
+  const sc = harmony(A.rows, mode);
+  const rows = [...A.rows].sort((a, b) => a.score - b.score);
+  box.innerHTML = '';
+  box.insertAdjacentHTML('beforeend',
+    '<div class="hero"><canvas id="hero-cv"></canvas><div class="shade"></div>' +
+    '<button class="gear" id="dots" aria-label="Показать точки на фото">◎</button>' +
+    '<div class="cap"><div><b>Гармония лица</b><span>Фронт</span></div>' +
+    '<div><div class="score">' + sc.toFixed(1) + '<small>/10</small></div><div class="score-l">' + label(sc) + '</div></div></div></div>' +
+    '<div class="seg" role="group" aria-label="Формула оценки"><button id="m-pen" aria-pressed="' + (mode === 'pen') + '">Формула штрафов</button><button id="m-tier" aria-pressed="' + (mode === 'tier') + '">Формула тиров</button></div>' +
+    '<p class="muted small" style="margin:0 4px">Учтено метрик: ' + A.rows.length + ' из ' + METRICS.length + (A.skipped.length ? '. Не хватает точек для: ' + A.skipped.map(m => m.n).join(', ') + '.' : '.') + '</p>' +
+    '<div class="list-h">Ваши фронтальные пропорции</div>');
+  for (const r of rows) {
+    const m = r.m, el = document.createElement('button');
+    el.className = 'm'; el.type = 'button';
+    el.innerHTML = '<div class="m-top"><span class="m-name"></span><span class="pill"></span><span class="m-sc' + (r.score < 7 ? ' bad' : '') + '"></span></div>' +
+      '<div class="bar"><i></i></div><div class="m-more"></div>';
+    el.querySelector('.m-name').textContent = m.n;
+    el.querySelector('.pill').textContent = fmt(r.v, m);
+    el.querySelector('.m-sc').textContent = r.score.toFixed(2);
+    el.querySelector('i').style.left = barPos(r.v, m) + '%';
+    el.querySelector('.m-more').innerHTML = '<div><b>Идеал:</b> ' + m.min + '–' + m.max + (m.u === 'x' ? '' : m.u) + '</div>' +
+      '<div><b>Отклонение:</b> ' + (r.dev * 100).toFixed(1) + '%, тир ' + r.tier + '</div><div style="margin-top:4px"></div>';
+    el.querySelector('.m-more div:last-child').textContent = m.h;
+    el.onclick = () => el.classList.toggle('open');
+    box.appendChild(el);
+  }
+  $('m-pen').onclick = () => { mode = 'pen'; renderResult(); };
+  $('m-tier').onclick = () => { mode = 'tier'; renderResult(); };
+  $('dots').onclick = () => { showDots = !showDots; drawHero(); };
+  requestAnimationFrame(drawHero);
+}
+window.addEventListener('resize', () => { if ($('s-result').classList.contains('on')) drawHero(); });
+</script>
+</body>
+</html>
