@@ -74,6 +74,17 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 .gl img,.gi img{width:100%;background:#fff;border-radius:12px;display:block;margin-bottom:3px}
 .gi{display:flex;gap:12px;align-items:flex-start}.gi img{width:130px;flex:none;margin:0;cursor:zoom-in}
 .st ul{margin:6px 0 0;padding-left:18px}.st li{margin:3px 0}
+/* оценка по эталонам и контуры */
+.rrow{display:flex;align-items:center;gap:8px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer;font-size:14px}
+.rrow>span{flex:1}.rrow b{color:var(--teal);font-size:16px}.rrow em{color:#aab8bd;font-style:normal}
+.refpair{display:flex;gap:8px;margin-top:12px}
+.refpair figure{margin:0;flex:1;min-width:0}
+.refpair figcaption{font-size:12px;color:var(--mute);margin-top:4px;line-height:1.25}
+.cv{width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;background:#2a3438;display:block}
+.strip{display:flex;gap:6px;overflow-x:auto;margin:10px 0 4px;padding-bottom:4px;position:relative}
+.strip figure{margin:0;flex:0 0 62px;text-align:center;font-size:11px;color:var(--mute);border:2px solid transparent;border-radius:12px;padding:2px;cursor:pointer}
+.strip figure.on{border-color:var(--teal);color:var(--teal)}
+.strip img{width:100%;border-radius:8px;display:block;background:#dfe7ea;min-height:20px}
 /* прочее */
 .ov{position:fixed;inset:0;background:#000d;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 .ov img{max-width:100%;max-height:100%;background:#fff;border-radius:16px}
@@ -464,7 +475,7 @@ function scaled(im, max, q) {
 async function createRecord(file) {
   const im = await loadImage(file), big = scaled(im, 1200, .88), th = scaled(im, 160, .7);
   return { id: uid(), created: Date.now(), updated: Date.now(), img: big.url, w: big.w, h: big.h,
-           thumb: th.url, pts: {}, own: {}, i: 0, harmony: null, tier: null };
+           thumb: th.url, pts: {}, own: {}, gender: 'male', ref: {}, i: 0, harmony: null, tier: null };
 }
 let saveTimer = 0;
 function persist(now = false) {
@@ -477,7 +488,7 @@ async function migrateOldDraft() {              // перенос чернови
   const im = new Image(); im.src = old.img; await im.decode().catch(() => {});
   const th = scaled(im, 160, .7);
   await Store.put({ id: uid(), created: Date.now(), updated: Date.now(), img: old.img, w: old.w, h: old.h,
-                    thumb: th.url, pts: old.pts || {}, own: {}, i: old.i || 0, harmony: null, tier: null });
+                    thumb: th.url, pts: old.pts || {}, own: {}, gender: 'male', ref: {}, i: old.i || 0, harmony: null, tier: null });
   try { localStorage.removeItem('pa'); } catch {}
 }
 
@@ -605,6 +616,7 @@ function renderResult(openI = null) {
       <p style="margin-top:12px"><b>Наибольший вклад в штраф:</b></p>
       <ul>${worst.length ? worst.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('') : '<li>Нет штрафов</li>'}</ul>
       <p class="mute" style="margin-top:12px">Сумма баллов: <b>${sum.toFixed(1)}</b> · метрик: <b>${R.length}</b> · оценка = ${sum.toFixed(1)} / ${R.length}</p></div>
+    ${refCard()}
     <h2>Ваши пропорции</h2>${R.map(pill).join('')}
     <div class="row"><button class="btn sec" data-a="edit">Править точки</button><button class="btn sec" data-a="home">История</button></div>
     <div class="row"><button class="btn sec" data-a="guide">Справочник точек</button></div>`);
@@ -766,17 +778,234 @@ function renderGuide() {
 }
 
 /* =====================================================================
-   9. ДЕЙСТВИЯ И НАВИГАЦИЯ
+   9. КОНТУРЫ ОБЛАСТЕЙ И ОЦЕНКА ПО ЭТАЛОНАМ (Angularity / Dimorphism / Misc)
+
+   Для каждой метрики контур строится автоматически по уже поставленным 48 точкам
+   (никакой отдельной разметки не нужно). Если точки правят — контур перестраивается.
+   Контур — гладкая кривая Катмулла–Рома, острые углы (уголки глаз, концы бровей,
+   уголки рта) задаются через corners. Фото выравнивается по линии зрачков.
+   Обрезок: затемнено всё вокруг, область обведена белой линией — как на эталонах.
+
+   Эталоны лежат рядом с index.html:
+     ref/<male|female>/<Angularity|Dimorphism|Misc>/<Название метрики>/frame_0000..0039.webp
+   Пользователь выбирает самый похожий кадр, его номер → оценка 0–10 (refScore).
+   ===================================================================== */
+const REF_DIR = 'ref';
+const FRAMES = 40;
+const refScore = i => i / (FRAMES - 1) * 10;                // кадр 0 → 0, кадр 39 → 10
+const GROUPS = { ANGU: { dir: 'Angularity', ru: 'Angularity' }, DIMO: { dir: 'Dimorphism', ru: 'Диморфизм' }, MISC: { dir: 'Misc', ru: 'Misc' } };
+
+/* Описание области. Элемент точки: 'ключ' или ['ключ', наружу, вниз] — смещение в долях высоты лица
+   (наружу — от средней линии лица, вниз — по вертикали; отрицательное — внутрь / вверх).
+   sort — упорядочить точки по углу вокруг центра, poly — прямые линии без сглаживания,
+   corners — ключи точек с острым углом, lips — готовая форма губ. */
+const REGIONS = {};
+const reg = (key, g, ru, parts, only) => { REGIONS[key] = { g, ru, parts, only }; };
+const eyeP = s => ({ p: [s + 'EyeMedialCanthus', s + 'EyeUpperEyelid', s + 'EyeLateralCanthus', s + 'EyeLowerEyelid'], corners: [s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'] });
+const browP = s => ({ p: [s + 'BrowHead', s + 'BrowPeak', s + 'BrowTail', s + 'BrowArch', s + 'BrowInnerCorner'], corners: [s + 'BrowHead', s + 'BrowTail'] });
+const FACE = { p: ['hairline', 'rightTemple', 'rightCheek', 'rightTopGonion', 'rightBottomGonion', 'chinRight', 'chinBottom', 'chinLeft', 'leftBottomGonion', 'leftTopGonion', 'leftCheek', 'leftTemple'], sort: true };
+const JAW = { p: ['leftEarGonion', 'leftBottomGonion', 'chinLeft', 'chinBottom', 'chinRight', 'rightBottomGonion', 'rightEarGonion'], sort: true };
+const SCALP = { p: [['hairline', 0, -.2], ['rightTemple', .02, -.17], ['rightTemple', .01, 0], 'hairline', ['leftTemple', .01, 0], ['leftTemple', .02, -.17]], sort: true };
+const underEye = () => sides(s => ({ p: [[s + 'EyeMedialCanthus', -.005, .004], [s + 'EyeLowerEyelid', 0, .004], [s + 'EyeLateralCanthus', .005, .004], [s + 'EyeLateralCanthus', .012, .05], [s + 'EyeLowerEyelid', 0, .055], [s + 'EyeMedialCanthus', -.005, .05]] }));
+
+/* Angularity */
+reg('jawDef', 'ANGU', 'Чёткость челюсти', [JAW]);
+reg('cheekDry', 'ANGU', 'Сухость щёк', sides(s => ({ p: [[s + 'EyeLowerEyelid', 0, .07], [s + 'Cheek', -.02, .03], [s + 'TopGonion', -.03, 0], ['mouth' + cap(s), .03, 0], ['nose' + cap(s), 0, .03]], sort: true })));
+reg('cheekbones', 'ANGU', 'Выраженность скул', sides(s => ({ p: [[s + 'EyeLateralCanthus', 0, .05], s + 'Cheek', [s + 'TopGonion', -.04, -.05], ['nose' + cap(s), .02, 0], [s + 'EyeLowerEyelid', 0, .07]], sort: true })));
+reg('chinDef', 'ANGU', 'Чёткость подбородка', [{ p: ['lowerLip', 'chinLeft', 'chinBottom', 'chinRight', ['mouthLeft', 0, .04], ['mouthRight', 0, .04]], sort: true }]);
+reg('submand', 'ANGU', 'Подчелюстная зона', [{ p: ['leftBottomGonion', 'chinLeft', 'chinBottom', 'chinRight', 'rightBottomGonion', ['neckRight', 0, .06], ['chinBottom', 0, .12], ['neckLeft', 0, .06]], sort: true }]);
+/* Dimorphism */
+reg('dJaw', 'DIMO', 'Челюсть', [JAW]);
+reg('dBrows', 'DIMO', 'Толщина бровей', sides(browP));
+reg('dEyes', 'DIMO', 'Глаза', sides(eyeP));
+reg('dFace', 'DIMO', 'Форма лица', [FACE]);
+reg('dBeard', 'DIMO', 'Растительность', [{ p: ['leftTopGonion', 'leftBottomGonion', 'chinLeft', 'chinBottom', 'chinRight', 'rightBottomGonion', 'rightTopGonion', 'noseRight', 'noseLeft'], sort: true }], 'male');
+reg('dHairline', 'DIMO', 'Линия роста волос', [{ p: [['hairline', 0, -.09], ['rightTemple', .02, -.06], ['rightTemple', 0, .06], ['hairline', 0, .06], ['leftTemple', 0, .06], ['leftTemple', .02, -.06]], sort: true }]);
+reg('dLips', 'DIMO', 'Губы', [{ lips: true }]);
+reg('dNose', 'DIMO', 'Нос (анфас)', [{ p: ['leftNoseBridge', 'rightNoseBridge', 'noseRight', 'nasalBase', 'noseBottom', 'noseLeft'], sort: true }]);
+/* Misc */
+reg('acne', 'MISC', 'Акне', [FACE]);
+reg('postAcne', 'MISC', 'Постакне', [FACE]);
+reg('eczema', 'MISC', 'Экзема', [FACE]);
+reg('hairLoss', 'MISC', 'Выпадение волос', [SCALP]);
+reg('hairDry', 'MISC', 'Сухость волос', [SCALP], 'male');
+reg('nasolabial', 'MISC', 'Носогубные складки', sides(s => ({ p: [['nose' + cap(s), 0, 0], ['nose' + cap(s), .05, .03], ['mouth' + cap(s), .06, .04], ['mouth' + cap(s), 0, 0]] })));
+reg('foreheadLines', 'MISC', 'Линии лба', [{ p: [['hairline', 0, .03], ['rightTemple', -.02, .03], ['rightBrowHead', 0, -.04], ['leftBrowHead', 0, -.04], ['leftTemple', -.02, .03]], sort: true }]);
+reg('glabella', 'MISC', 'Межбровные морщины', [{ p: [['leftBrowHead', 0, -.07], ['rightBrowHead', 0, -.07], ['rightBrowInnerCorner', 0, .01], ['leftBrowInnerCorner', 0, .01]], sort: true }]);
+reg('crows', 'MISC', 'Гусиные лапки', sides(s => ({ p: [[s + 'EyeLateralCanthus', .01, -.03], [s + 'EyeLateralCanthus', .1, -.04], [s + 'EyeLateralCanthus', .1, .05], [s + 'EyeLateralCanthus', .01, .04]] })));
+reg('platysma', 'MISC', 'Платизма', [{ p: ['leftBottomGonion', 'rightBottomGonion', ['neckRight', 0, .12], ['neckLeft', 0, .12]], sort: true }]);
+reg('underEye', 'MISC', 'Зона под глазами', underEye());
+reg('darkCircles', 'MISC', 'Тёмные круги', underEye());
+reg('eyeBags', 'MISC', 'Мешки под глазами', underEye());
+reg('eyeRed', 'MISC', 'Покраснение глаз', sides(eyeP));
+reg('scleralShow', 'MISC', 'Склеральный показ', sides(eyeP));
+reg('scleraRed', 'MISC', 'Покраснение склер', sides(eyeP));
+reg('browDensity', 'MISC', 'Плотность бровей', sides(browP));
+reg('lashes', 'MISC', 'Ресницы', sides(s => ({ p: [[s + 'EyeMedialCanthus', 0, -.012], [s + 'EyeUpperEyelid', 0, -.025], [s + 'EyeLateralCanthus', 0, -.012], [s + 'EyeLowerEyelid', 0, .02]], corners: [s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'] })));
+reg('browColor', 'MISC', 'Цвет бровей', sides(browP));
+reg('ptosis', 'MISC', 'Опущение век', sides(s => ({ p: [s + 'EyeMedialCanthus', s + 'UpperEyelidCrease', s + 'EyeLateralCanthus', s + 'EyeUpperEyelid'], corners: [s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'] })));
+reg('upperLid', 'MISC', 'Верхнее веко', sides(s => ({ p: [s + 'EyeMedialCanthus', [s + 'UpperEyelidCrease', 0, -.01], s + 'EyeLateralCanthus', s + 'EyeUpperEyelid'], corners: [s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'] })));
+reg('bulbous', 'MISC', 'Луковичный кончик носа', [{ p: ['noseLeft', 'noseRight', ['noseBottom', 0, -.075], 'noseBottom'], sort: true }]);
+reg('nostrils', 'MISC', 'Ноздри', [{ p: [['noseLeft', -.01, 0], ['noseRight', -.01, 0], ['noseBottom', 0, .005], ['noseBottom', 0, -.03]], sort: true }]);
+
+/* Гладкая кривая через точки (Катмулл–Ром). closed — замкнутая */
+function crSeg(Pn, closed) {
+  const n = Pn.length, N = 14, out = [], g = i => closed ? Pn[(i + n) % n] : Pn[clamp(i, 0, n - 1)];
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = g(i - 1), b = g(i), c = g(i + 1), e = g(i + 2);
+    for (let t = 0; t < N; t++) {
+      const u = t / N, u2 = u * u, u3 = u2 * u;
+      const f = (p0, p1, p2, p3) => .5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (3 * p1 - p0 - 3 * p2 + p3) * u3);
+      out.push({ x: f(a.x, b.x, c.x, e.x), y: f(a.y, b.y, c.y, e.y) });
+    }
+  }
+  if (!closed) out.push(Pn[n - 1]);
+  return out;
+}
+/* Замкнутый контур: гладкий, но с острыми углами в точках corners (индексы) */
+function shapeOf(pts, corners, poly) {
+  if (poly || pts.length < 3) return pts;
+  if (!corners.length) return crSeg(pts, true);
+  const c = [...corners].sort((a, b) => a - b), out = [];
+  c.forEach((ci, j) => {
+    const nj = c[(j + 1) % c.length], seg = [pts[ci]];
+    let i = ci;
+    do { i = (i + 1) % pts.length; seg.push(pts[i]); } while (i !== nj);
+    out.push(...crSeg(seg, false).slice(0, -1));
+  });
+  return out;
+}
+/* Контуры области в выровненной системе координат: [{poly, lines}] */
+function regionPaths(key) {
+  const rot = faceFrame();
+  CTX = { pts: cur.pts, rot: 0 };
+  const L = k => rotPt(raw(k), rot);
+  const H = Math.abs(L('chinBottom').y - L('hairline').y) || 1;                                   // высота лица — единица смещений
+  const cx = ['hairline', 'innerCupidsBow', 'noseBottom', 'chinBottom'].reduce((t, k) => t + L(k).x, 0) / 4;   // средняя линия лица
+  const el = e => { const [k, ox = 0, oy = 0] = Array.isArray(e) ? e : [e], p = L(k); return { x: p.x + (p.x < cx ? -1 : 1) * ox * H, y: p.y + oy * H, k }; };
+  return REGIONS[key].parts.map(part => {
+    let pts, corners = [], lines = [];
+    if (part.lips) {
+      const [a, b] = [L('mouthLeft'), L('mouthRight')].sort((u, v) => u.x - v.x), c = L('cupidsBow'),
+            m = { x: 2 * cx - c.x, y: c.y }, [p1, p2] = [c, m].sort((u, v) => u.x - v.x);   // второй пик — зеркально
+      pts = [a, p1, L('innerCupidsBow'), p2, b, L('lowerLip')]; corners = [0, 4];
+      lines = [crSeg([a, L('mouthMiddle'), b], false)];                                        // линия смыкания губ
+    } else {
+      pts = part.p.map(el);
+      if (part.sort) { const c = mean(pts); pts.sort((u, v) => Math.atan2(u.y - c.y, u.x - c.x) - Math.atan2(v.y - c.y, v.x - c.x)); }
+      corners = (part.corners || []).map(k => pts.findIndex(q => q.k === k)).filter(i => i >= 0);
+    }
+    return { poly: shapeOf(pts, corners, part.poly), lines };
+  });
+}
+
+/* Картинка контура: фото по центру области, всё вокруг затемнено, область обведена */
+const imgCache = {};
+const getImg = async () => imgCache[cur.id] || (imgCache[cur.id] = await new Promise((ok, fail) => {
+  const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = cur.img;
+}));
+const trace = (g, pts, close) => { g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); if (close) g.closePath(); };
+async function regionImage(key, px = 640) {
+  const im = await getImg(), rot = faceFrame(), parts = regionPaths(key), all = parts.flatMap(p => p.poly);
+  const xs = all.map(q => q.x), ys = all.map(q => q.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const S = Math.max(x1 - x0, y1 - y0) * 2.4, ox = (x0 + x1) / 2 - S / 2, oy = (y0 + y1) / 2 - S / 2, k = px / S;
+  const c = Object.assign(document.createElement('canvas'), { width: px, height: px }), g = c.getContext('2d');
+  g.fillStyle = '#566064'; g.fillRect(0, 0, px, px);
+  g.save(); g.scale(k, k); g.translate(-ox, -oy); g.rotate(rot); g.drawImage(im, 0, 0, cur.w, cur.h); g.restore();
+  const m = Object.assign(document.createElement('canvas'), { width: px, height: px }), mg = m.getContext('2d');   // затемнение с «окнами»
+  mg.fillStyle = 'rgba(16,24,28,.72)'; mg.fillRect(0, 0, px, px);
+  mg.globalCompositeOperation = 'destination-out';
+  mg.save(); mg.scale(k, k); mg.translate(-ox, -oy); parts.forEach(p => { trace(mg, p.poly, true); mg.fill(); }); mg.restore();
+  g.drawImage(m, 0, 0);
+  g.save(); g.scale(k, k); g.translate(-ox, -oy);
+  g.lineJoin = g.lineCap = 'round'; g.strokeStyle = '#fff'; g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 5;
+  g.lineWidth = 4 / k; parts.forEach(p => { trace(g, p.poly, true); g.stroke(); });
+  g.lineWidth = 3 / k; parts.forEach(p => p.lines.forEach(l => { trace(g, l, false); g.stroke(); }));
+  g.restore();
+  return c.toDataURL('image/jpeg', .9);
+}
+
+/* ---------- данные оценки ---------- */
+const gender = () => cur.gender || 'male';
+const allKeys = () => Object.keys(REGIONS).filter(k => !REGIONS[k].only || REGIONS[k].only === gender());
+const fmtS = v => v == null ? '—' : v.toFixed(1);
+function groupScore(g) {                                   // группа = сумма баллов оценённых метрик / их число
+  const keys = allKeys().filter(k => REGIONS[k].g === g), done = keys.filter(k => cur.ref?.[k] != null);
+  return { n: done.length, total: keys.length, score: done.length ? done.reduce((t, k) => t + refScore(cur.ref[k]), 0) / done.length : null };
+}
+const refPath = (key, i) => encodeURI(`${REF_DIR}/${gender()}/${GROUPS[REGIONS[key].g].dir}/${REGIONS[key].ru}/frame_${String(i).padStart(4, '0')}.webp`);
+const refCard = () => `<div class="card"><h3>Оценка по эталонам</h3>
+  ${['ANGU', 'DIMO', 'MISC'].map(g => { const s = groupScore(g); return `<div class="rrow" data-a="reflist"><span>${GROUPS[g].ru}<small class="full">оценено ${s.n} из ${s.total}</small></span><b>${fmtS(s.score)}</b><em>›</em></div>`; }).join('')}
+  <div class="row"><button class="btn" data-a="reflist">Оценить по контурам</button></div></div>`;
+
+/* ---------- список групп и метрик ---------- */
+function renderRefList() {
+  const card = g => {
+    const s = groupScore(g), keys = allKeys().filter(k => REGIONS[k].g === g);
+    return `<div class="card"><div class="top"><h3>${GROUPS[g].ru}</h3><b class="sc">${fmtS(s.score)}<small style="font-size:12px;color:var(--mute)">/10</small></b></div>
+      <div class="mute" style="font-size:12px">оценено ${s.n} из ${s.total}</div>
+      ${keys.map(k => { const v = cur.ref?.[k]; return `<div class="rrow" data-a="rrate" data-k="${k}"><span>${REGIONS[k].ru}</span><b>${v == null ? '—' : refScore(v).toFixed(1)}</b><em>›</em></div>`; }).join('')}</div>`;
+  };
+  render('reflist', `<h1>Оценка по эталонам</h1><div class="mute">Контур области сравнивается с 40 эталонными кадрами</div>
+    <div class="row"><button class="btn ${gender() === 'male' ? '' : 'sec'}" data-a="gender" data-v="male">Мужчина</button><button class="btn ${gender() === 'female' ? '' : 'sec'}" data-a="gender" data-v="female">Женщина</button></div>
+    ${['ANGU', 'DIMO', 'MISC'].map(card).join('')}
+    <div class="row"><button class="btn sec" data-a="rback">К результату</button></div>`);
+}
+
+/* ---------- оценка одной метрики ---------- */
+let rate = null;
+function renderRefRate(key) {
+  const keys = allKeys(), i = keys.indexOf(key), r = REGIONS[key], saved = cur.ref?.[key];
+  rate = { key, idx: saved ?? Math.round((FRAMES - 1) / 2) };
+  const strip = Array.from({ length: FRAMES }, (_, n) => `<figure data-a="rpick" data-i="${n}" id="th${n}"><img loading="lazy" src="${refPath(key, n)}" alt="" onerror="this.remove()"><b>${n}</b></figure>`).join('');
+  render('refrate', `<div class="top"><h1>${r.ru}</h1><span class="mute">${i + 1}/${keys.length}</span></div>
+    <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}</div>
+    <div class="refpair"><figure><img class="cv" id="rc" alt=""><figcaption>Ваш контур</figcaption></figure>
+      <figure><img class="cv" id="rf" alt=""><figcaption id="rcap"></figcaption></figure></div>
+    <div class="card"><input type="range" id="rs" min="0" max="${FRAMES - 1}" value="${rate.idx}" style="width:100%;accent-color:var(--teal)">
+      <div class="strip" id="strip">${strip}</div>
+      <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего.</p>
+      <button class="lnk" data-a="rclr">Сбросить оценку</button></div>
+    <div class="nav"><button class="btn sec sq" data-a="rprev">‹</button>
+      <select id="rsel">${keys.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${cur.ref?.[k] != null ? '✓ ' : ''}${REGIONS[k].ru}</option>`).join('')}</select>
+      <button class="btn sq" data-a="rnext">›</button></div>`, true);
+  refShow(false);
+  regionImage(key).then(u => { if (rate?.key === key && $('#rc')) $('#rc').src = u; }).catch(() => toast('Не удалось построить контур'));
+}
+function refShow(save = true) {
+  const { key, idx } = rate;
+  if (save) { cur.ref = cur.ref || {}; cur.ref[key] = idx; persist(); }
+  const rf = $('#rf'), done = cur.ref?.[key] != null;
+  rf.onerror = () => { rf.style.visibility = 'hidden'; $('#rcap').textContent = `Эталон ${idx}: файл не найден (${REF_DIR}/…)`; };
+  rf.onload = () => { rf.style.visibility = ''; };
+  rf.src = refPath(key, idx);
+  $('#rcap').textContent = `Эталон ${idx}` + (done ? ` · ${refScore(idx).toFixed(1)}/10` : ' · оценка не выбрана');
+  $('#rs').value = idx;
+  document.querySelectorAll('#strip figure').forEach((f, n) => f.classList.toggle('on', n === idx));
+  const s = $('#strip'), f = $('#th' + idx); if (s && f) s.scrollLeft = f.offsetLeft - s.clientWidth / 2 + f.offsetWidth / 2;
+  const sel = $('#rsel'), o = sel?.options[sel.selectedIndex]; if (o) o.textContent = `${done ? '✓ ' : ''}${REGIONS[key].ru}`;
+}
+function rateStep(s) {
+  const keys = allKeys(), i = keys.indexOf(rate.key) + s;
+  if (i < 0) return;
+  if (i >= keys.length) return renderRefList();
+  renderRefRate(keys[i]); scrollTo(0, 0);
+}
+
+/* =====================================================================
+   10. ДЕЙСТВИЯ И НАВИГАЦИЯ
    ===================================================================== */
 const openRecord = async id => {
   const r = await Store.get(id); if (!r) return toast('Запись не найдена');
-  cur = r; cur.own = cur.own || {};
+  cur = r; cur.own = cur.own || {}; cur.ref = cur.ref || {}; cur.gender = cur.gender || 'male';
   if (isComplete(r)) renderResult();
   else { const miss = PTS.findIndex(p => !r.pts[p.k]); cur.i = miss >= 0 ? miss : 0; renderMark(); }
   scrollTo(0, 0);
 };
 const goBack = () => {
   if (view === 'fix') { fixRestore(); persist(true); return renderResult(fix.i); }
+  if (view === 'refrate') { persist(true); return renderRefList(); }
+  if (view === 'reflist') { persist(true); return renderResult(); }
   if (view === 'guide') return ({ mark: () => cur ? renderMark() : renderHome(), result: () => cur ? renderResult() : renderHome() }[guideFrom] || renderHome)();
   persist(true); renderHome();
 };
@@ -796,6 +1025,14 @@ const ACTIONS = {
   fxdone() { persist(true); renderResult(fix.i); },
   guide() { guideFrom = view; renderGuide(); scrollTo(0, 0); },
   back: goBack,
+  reflist() { renderRefList(); scrollTo(0, 0); },
+  rback() { persist(true); renderResult(); scrollTo(0, 0); },
+  gender({ v }) { cur.gender = v; persist(); renderRefList(); },
+  rrate({ k }) { renderRefRate(k); scrollTo(0, 0); },
+  rpick({ i }) { rate.idx = +i; refShow(true); haptic(); },
+  rclr() { delete cur.ref[rate.key]; persist(); refShow(false); },
+  rprev: () => rateStep(-1),
+  rnext: () => rateStep(1),
   zoom({ k }) {
     const ov = Object.assign(document.createElement('div'), { className: 'ov', innerHTML: `<img src="${IMG_DIR}/${k}.webp" alt="">` });
     ov.dataset.a = 'close'; document.body.appendChild(ov);
@@ -807,9 +1044,11 @@ app.addEventListener('click', e => {
   const b = e.target.closest('[data-a]'); if (b && ACTIONS[b.dataset.a]) ACTIONS[b.dataset.a](b.dataset, b);
 });
 document.body.addEventListener('click', e => { const o = e.target.closest('.ov'); if (o) o.remove(); });
+app.addEventListener('input', e => { if (e.target.id === 'rs' && rate) { rate.idx = +e.target.value; refShow(true); } });
 app.addEventListener('change', async e => {
   const t = e.target;
   if (t.id === 'sel') { cur.i = +t.value; persist(); renderMark(); scrollTo(0, 0); }
+  else if (t.id === 'rsel') { renderRefRate(t.value); scrollTo(0, 0); }
   else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' ? t.value : t.checked; saveSettings(); }
   else if (t.id === 'file' && t.files[0]) {
     try { cur = await createRecord(t.files[0]); await Store.put(cur); renderMark(); scrollTo(0, 0); }
