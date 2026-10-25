@@ -617,11 +617,11 @@ tm('Gonial Angle', 'Угол в верхнем углу челюсти межд�
   () => pang('gonionTop', 'intertragicNotch', 'menton'), 'gonionTop-intertragicNotch,gonionTop-menton', A3('gonionTop', 'intertragicNotch', 'menton'));
 tm('Nasofrontal Angle', 'Угол в корне носа между линиями к глабелле и к супратипу', 106, 129, [5, 9, 12, 18], [5, 9, 12, 18], '°',
   () => pang('nasion', 'glabella', 'supratip'), 'nasion-glabella,nasion-supratip', A3('nasion', 'glabella', 'supratip'));
-tm('Mandible Plane Angle', 'Угол в верхнем углу челюсти между линиями к нижней губе и к низу подбородка', 15, 22, [1, 3, 5], [6, 8, 13], '°',
-  () => pang('gonionTop', 'labraleInferius', 'menton'), 'gonionTop-labraleInferius,gonionTop-menton', A3('gonionTop', 'labraleInferius', 'menton'));
-tm('Ramus to Mandible', 'Длина ветви (вырезка уха — верхний угол челюсти) к длине челюсти по горизонтали (от угла до вертикали через корень носа)', .59, .77, [.03, .05, .10, .15], [.03, .05, .10, .15], 'x',
+tm('Mandible Plane Angle', 'Угол в нижнем углу челюсти между линиями к подгубной складке и к низу подбородка', 15, 22, [1, 3, 5], [6, 8, 13], '°',
+  () => pang('gonionBottom', 'sublabiale', 'menton'), 'gonionBottom-sublabiale,gonionBottom-menton', A3('gonionBottom', 'sublabiale', 'menton'));
+tm('Ramus to Mandible', 'Длина ветви (вырезка уха — верхний угол челюсти) к расстоянию по горизонтали от верхнего угла челюсти до франкфуртской вертикали через корень носа', .59, .77, [.03, .05, .10, .15], [.03, .05, .10, .15], 'x',
   () => pdist('intertragicNotch', 'gonionTop') / (Math.abs(Qk('gonionTop').x - Qk('nasion').x) || 1), 'intertragicNotch-gonionTop', null,
-  { keys: ['gonionTop', 'menton', 'nasion'], ex: R => { const g = R('gonionTop'), n = R('nasion'), m = R('menton'); return { sg: [[{ x: g.x, y: m.y }, { x: n.x, y: m.y }]], dash: [[g, { x: g.x, y: m.y }]] }; } });
+  { keys: ['gonionTop', 'nasion'], ex: R => { const g = R('gonionTop'), n = R('nasion'); return { sg: [[g, { x: n.x, y: g.y }]], full: [vline(n.x)] }; } });
 tm('Facial Convexity Glabella', 'Угол в субназале между линиями к глабелле и к подбородку', 168, 176, [3, 5, 8], [3, 5, 8], '°',
   () => pang('subnasale', 'glabella', 'pogonion'), 'subnasale-glabella,subnasale-pogonion', A3('subnasale', 'glabella', 'pogonion'));
 tm('Submental Cervical Angle', 'Угол в шейной точке между линиями к точке шеи и к низу подбородка', 90, 105, [5, 15, 20], [5, 15, 20], '°',
