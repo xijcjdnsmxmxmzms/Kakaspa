@@ -97,6 +97,12 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 .btn.sm{width:auto;padding:8px 14px;font-size:13px;border-radius:20px;flex:none}
 .gh{display:flex;align-items:center;justify-content:space-between;margin:22px 4px 2px}
 .curve h3{margin-bottom:4px}
+.mc{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin:8px 0 10px;box-shadow:0 1px 8px #0a2a3510}
+.mch{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;letter-spacing:.03em;color:#6b777c}
+.mch span{font-weight:500;font-size:12px;letter-spacing:0;color:var(--mute)}
+.mch i{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-2px;margin-right:4px;box-sizing:border-box}
+.mch .d1{background:#cfe3d6;border:2px solid #8fbf9f}.mch .d2{background:#fff;border:3px solid #6a7479;margin-left:4px}
+.det .mc svg{background:none;border-radius:0;margin:6px 0 0}
 /* прочее */
 .ov{position:fixed;inset:0;background:#000d;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 .ov img{max-width:100%;max-height:100%;background:#fff;border-radius:16px}
@@ -131,7 +137,7 @@ function readJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(
 function writeJSON(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
 /* Настройки (лёгкие, поэтому localStorage). line — цвет линий и углов на схемах */
-const Settings = { level: true, auto: false, line: '#9aa5aa', width: 1, dot: 1, ...readJSON('pa_settings', {}) };
+const Settings = { level: true, auto: false, line: '#9aa5aa', width: 1, dot: 1, sort: 'cat', ...readJSON('pa_settings', {}) };
 const saveSettings = () => writeJSON('pa_settings', Settings);
 
 /* =====================================================================
@@ -288,7 +294,10 @@ const ipd = () => d('leftEyePupil', 'rightEyePupil');
 const ew  = s => d(s + 'EyeMedialCanthus', s + 'EyeLateralCanthus');
 const tgw = () => d('leftTopGonion', 'rightTopGonion');
 const ctilt = () => avg(s => { const m = P(s + 'EyeMedialCanthus'), l = P(s + 'EyeLateralCanthus'); return deg(Math.atan2(m.y - l.y, Math.abs(l.x - m.x))); });
-const btilt = () => avg(s => ang(s + 'BrowInnerCorner', s + 'BrowPeak', s + 'BrowArch'));
+const btilt = () => avg(s => {                // наклон линий «внутренний угол → пик» и «внутренний угол → изгиб» к горизонтали
+  const v = P(s + 'BrowInnerCorner');
+  return ['Peak', 'Arch'].map(n => { const q = P(s + 'Brow' + n); return deg(Math.atan2(v.y - q.y, Math.abs(q.x - v.x))); }).reduce((a, b) => a + b) / 2;
+});
 const iaa = () => ang('noseBottom', 'rightEyeLateralCanthus', 'leftEyeLateralCanthus');
 const jfa = () => angV(sub(P('chinLeft'), P('leftBottomGonion')), sub(P('chinRight'), P('rightBottomGonion')));
 const bit = () => d('leftTemple', 'rightTemple') / zy() * 100;
@@ -314,7 +323,7 @@ function jfaGeom(R) {                        // линии челюсти про
 }
 const iaaGeom = R => [tri(R, 'noseBottom', 'leftEyeLateralCanthus', 'rightEyeLateralCanthus')];
 const canthalGeom = R => sides(s => hz(R, s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'));
-const browGeom = R => sides(s => tri(R, s + 'BrowInnerCorner', s + 'BrowPeak', s + 'BrowArch'));
+const browGeom = R => sides(s => ['Peak', 'Arch'].map(n => hz(R, s + 'BrowInnerCorner', s + 'Brow' + n))).flat();
 
 /* =====================================================================
    5. МЕТРИКИ
@@ -397,7 +406,7 @@ metric('Bitemporal', 'Ширина между висками к ширине с�
 metric('Jaw Frontal Angle', 'Угол, под которым линии нижней челюсти сходятся у подбородка', 84.5, 95, '°', 1, jfa, 'leftBottomGonion-chinLeft,rightBottomGonion-chinRight', jfaGeom);
 metric('IAA–JFA Deviation', 'Разница между Ipsilateral Alar Angle и Jaw Frontal Angle', 0, 2.5, '°', 1, () => Math.abs(iaa() - jfa()), 'noseBottom-leftEyeLateralCanthus,noseBottom-rightEyeLateralCanthus,leftBottomGonion-chinLeft,rightBottomGonion-chinRight',
   R => [...iaaGeom(R), ...jfaGeom(R)]);
-metric('Eyebrows Tilt', 'Угол между линиями «внутренний угол — пик брови» и «внутренний угол — изгиб»', 5, 13, '°', 1, btilt, '$BrowInnerCorner-$BrowPeak,$BrowInnerCorner-$BrowArch', browGeom);
+metric('Eyebrows Tilt', 'Наклон бровей: средний угол к горизонтали у линий «внутренний угол — пик брови» и «внутренний угол — изгиб»', 5, 13, '°', 1, btilt, '$BrowInnerCorner-$BrowPeak,$BrowInnerCorner-$BrowArch', browGeom);
 metric('Jaw Gonial Slope', 'Угол в верхнем углу челюсти между скулой и подбородком', 140, 142.5, '°', 1, () => avg(s => ang(s + 'TopGonion', s + 'Cheek', 'chin' + cap(s))),
   'leftCheek-leftTopGonion,leftTopGonion-chinLeft,rightCheek-rightTopGonion,rightTopGonion-chinRight',
   R => sides(s => tri(R, s + 'TopGonion', s + 'Cheek', 'chin' + cap(s))), true);
@@ -462,6 +471,26 @@ function pctAt(x) {                                  // линейная инт�
 }
 const topOf = s => s >= 5 ? pctAt(s) : 100 - pctAt(10 - s);
 const fmtTop = t => t >= 10 ? t.toFixed(1) : t >= 0.1 ? t.toFixed(2) : t.toPrecision(2);
+function metricCurveCard(m) {
+  const L = 34, Rr = 332, T = 14, B = 130;
+  const pad = Math.max(.22 * Math.abs(m.min), .22 * Math.abs(m.max), 1e-6);
+  const lo = m.min === 0 ? 0 : m.min - pad, hi = m.max + pad;
+  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * sc / 10;
+  const N = 90, pts = Array.from({ length: N + 1 }, (_, i) => { const x = lo + (hi - lo) * i / N; return { x: X(x), y: Y(scoreMetric(m, x).score) }; });
+  const dd = 'M' + pts.map(q => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join('L');
+  const fl = x => x.toFixed(m.u === 'x' ? 2 : 1) + m.u;
+  let g = '';
+  [0, 2, 4, 6, 8, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
+  const vv = clamp(m.v, lo, hi), mx = X(vv), my = Y(m.score);
+  const svg = `<svg viewBox="0 0 340 158"><defs><linearGradient id="mgrad" gradientUnits="userSpaceOnUse" x1="0" y1="${B}" x2="0" y2="${T}">
+      <stop offset="0" stop-color="#9a4b3f"/><stop offset=".4" stop-color="#b58a3a"/><stop offset=".7" stop-color="#4f8c68"/><stop offset="1" stop-color="#1f6b7a"/></linearGradient></defs>
+    ${g}<rect x="${X(m.min)}" y="${T}" width="${Math.max(2, X(m.max) - X(m.min))}" height="${B - T}" fill="#9db4bd" fill-opacity=".28"/>
+    <path d="${dd}" fill="none" stroke="url(#mgrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="${mx}" x2="${mx}" y1="${my}" y2="${B}" stroke="#8a9499" stroke-width="3" stroke-dasharray="4 4"/>
+    <circle cx="${mx}" cy="${my}" r="8" fill="#fff" stroke="#1f6b7a" stroke-width="4"/>
+    <text x="${L}" y="152" font-size="12" fill="#aab8bd">${fl(lo)}</text><text x="${(L + Rr) / 2}" y="152" font-size="12" fill="#aab8bd" text-anchor="middle">${fl((lo + hi) / 2)}</text><text x="${Rr}" y="152" font-size="12" fill="#aab8bd" text-anchor="end">${fl(hi)}</text></svg>`;
+  return `<div class="mc"><div class="mch"><b>КРИВАЯ ОЦЕНКИ</b><span><i class="d1"></i>Идеал · <i class="d2"></i>Вы</span></div>${svg}</div>`;
+}
 function curveSvg(s, mini = false) {
   const bot = mini ? 82 : 190, hh = mini ? 52 : 150, vh = mini ? 100 : 222;
   const X = v => 30 + 300 * v / 10, Y = p => bot - hh * Math.min(p, 50) / 50;
@@ -560,6 +589,9 @@ function renderSettings() {
       <label><input type="color" data-set="line" value="${Settings.line}"><span>Цвет линий и углов на схемах</span></label>
       <label><span>Толщина линий на схемах<input type="range" data-set="width" min="0.5" max="3" step="0.1" value="${Settings.width}"></span></label>
       <label><span>Размер точек на схемах<input type="range" data-set="dot" min="0.5" max="3" step="0.1" value="${Settings.dot}"></span></label>
+      <label><span>Порядок метрик гармонии<select data-set="sort" style="width:100%;height:40px;margin-top:8px">
+        ${[['cat', 'По группам'], ['best', 'От лучшей к худшей'], ['worst', 'От худшей к лучшей'], ['alpha', 'По алфавиту']].map(([v, n]) => `<option value="${v}" ${Settings.sort === v ? 'selected' : ''}>${n}</option>`).join('')}
+      </select></span></label>
     </div>
     <div class="row"><button class="btn sec" data-a="guide">Справочник точек</button></div>
     <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
@@ -678,11 +710,13 @@ function harmView(A) {
     return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div>
       <div class="zone"><i style="left:${pos}%"></i></div><div class="det"></div></div>`;
   };
-  const secs = cats.map(([t, names]) => {
+  const order = { best: (a, b) => R[b].score - R[a].score || R[a].off - R[b].off, worst: (a, b) => R[a].score - R[b].score || R[b].off - R[a].off, alpha: (a, b) => R[a].name.localeCompare(R[b].name) }[Settings.sort];
+  const flat = order ? `<div style="margin-top:12px"></div>` + R.map((m, i) => i).sort(order).map(i => pill(R[i], i)).join('') : null;
+  const secs = flat ?? cats.map(([t, names]) => {
     const is = names.filter(n => idx.has(n)).map(n => idx.get(n));
     if (!is.length) return '';
     const a = is.reduce((t2, i) => t2 + R[i].score, 0) / is.length;
-    return `<div class="gh"><h2 style="margin:0">${t}</h2><b class="sc" style="font-size:17px">${a.toFixed(1)}</b></div>${is.map(i => pill(R[i], i)).join('')}`;
+    return `<div class="gh"><h2 style="margin:0">${t}</h2></div>${is.map(i => pill(R[i], i)).join('')}`;
   }).join('');
   return heroHtml('Гармония', harmony.toFixed(1), `${label(harmony)} · Top ${fmtTop(topOf(harmony))}%`) +
     curveCard('Где вы в популяции', harmony) + secs +
@@ -777,7 +811,7 @@ function toggleMetric(i) {
   el.classList.toggle('open');
   if (dt.innerHTML) return;
   const used = [...new Set(segs(m.ln).flat())].map(k => PTS.find(p => p.k === k)).filter(Boolean);
-  dt.innerHTML = measureSvg(m) + `<div class="curve">${curveSvg(m.score, true)}</div><p>${m.ds}</p>
+  dt.innerHTML = measureSvg(m) + metricCurveCard(m) + `<p>${m.ds}</p>
     <div class="gl">${used.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
     <p><b>Значение:</b> ${fmtVal(m.v, m.u)} · <b>Норма:</b> ${m.min}–${m.max}${m.u}</p>
     <p><b>Оценка:</b> ${m.score.toFixed(1)}/10</p>
@@ -1131,7 +1165,7 @@ app.addEventListener('change', async e => {
   const t = e.target;
   if (t.id === 'sel') { cur.i = +t.value; persist(); renderMark(); scrollTo(0, 0); }
   else if (t.id === 'rsel') { renderRefRate(t.value); scrollTo(0, 0); }
-  else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' ? t.value : t.type === 'range' ? +t.value : t.checked; saveSettings(); }
+  else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' || t.tagName === 'SELECT' ? t.value : t.type === 'range' ? +t.value : t.checked; saveSettings(); }
   else if (t.id === 'file' && t.files[0]) {
     try { cur = await createRecord(t.files[0]); await Store.put(cur); tab = 'over'; renderGender(); scrollTo(0, 0); }
     catch (err) { toast(err.message || 'Не удалось загрузить фото'); }
