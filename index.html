@@ -607,7 +607,7 @@ function tierScore(v, min, max, bl, bh) {
 const PM = [];
 function tm(name, ds, min, max, bl, bh, u, f, ln, an, o = {}) {
   const dom = o.dom || [min - bl[bl.length - 1] * 1.25, max + bh[bh.length - 1] * 1.25];
-  PM.push({ name, ds, min, max, u, f, ln, an, ex: o.ex, text: o.text, dom, keys: o.keys,
+  PM.push({ name, ds, min, max, u, f, ln, an, ex: o.ex, text: o.text, dom, keys: o.keys, wide: o.wide,
     sc: v => tierScore(v, min, max, bl, bh),
     tier: v => { const dv = v < min ? min - v : v > max ? v - max : 0; if (!dv) return 1; const B = v < min ? bl : bh, k = B.findIndex(b => dv <= b); return k < 0 ? B.length + 2 : k + 2; },
     show: v => v.toFixed(u === '°' ? 1 : 2) + u });
@@ -672,7 +672,7 @@ tm('Nasomental Angle', 'Угол в кончике носа между лини�
   () => pang('pronasale', 'nasion', 'pogonion'), 'pronasale-nasion,pronasale-pogonion', A3('pronasale', 'nasion', 'pogonion'));
 tm('Gonion to Mouth', 'Положение верхнего угла челюсти относительно уровня уголка рта (в % высоты лица, + = ниже рта)', .5, 1e9, [2, 6], [], '%',
   () => (Qk('gonionTop').y - Qk('cheilion').y) / faceH() * 100, '', null,
-  { dom: [-10, 6], keys: ['gonionTop', 'cheilion'], ex: R => { const g = R('gonionTop'), c = R('cheilion'); return { full: [hline(c.y)], sg: [[g, { x: g.x, y: c.y }]] }; } });
+  { wide: true, dom: [-10, 6], keys: ['gonionTop', 'cheilion'], ex: R => { const g = R('gonionTop'), c = R('cheilion'); return { full: [hline(c.y)], sg: [[g, { x: g.x, y: c.y }]] }; } });
 tm('Recession Relative to Frankfort Plane', 'Положение подбородка относительно вертикали через глабеллу (в % высоты лица, − = отступает)', -2, 1e9, [4, 8], [], '%',
   () => (Qk('pogonion').x - Qk('glabella').x) * PC.f / faceH() * 100, '', null,
   { dom: [-14, 4], keys: ['glabella', 'pogonion'], ex: R => { const g = R('glabella'), pg = R('pogonion'); return { full: [vline(g.x)], sg: [[pg, { x: g.x, y: pg.y }]] }; } });
@@ -696,10 +696,10 @@ tm('Interior Midface Projection Angle', 'Угол в субаларе между
   'subalare-eyelidEnd', R => { const s0 = R('subalare'), e = R('eyelidEnd'), X = { x: e.x, y: s0.y }; return [{ v: s0, a: e, b: X, dash: [[s0, X], [e, X]] }]; });
 tm('Anterior Facial Depth', 'Угол в субаларе между линиями к трагиону и к нижнему веку', 64.5, 67.5, [8, 16, 24, 32], [8, 16, 24, 32], '°',
   () => pang('subalare', 'tragus', 'lowerEyelid'), 'subalare-tragus,subalare-lowerEyelid', A3('subalare', 'tragus', 'lowerEyelid'));
-tm('Frankfort-tip Angle', 'Угол в субназале между горизонталью (параллель франкфуртской плоскости) и линией к инфратипу', 32, 38, [8, 12, 18], [8, 12, 18], '°',
-  () => { const s0 = Qk('subnasale'), w = sub(Qk('infratip'), s0); return angV({ x: PC.f, y: 0 }, w); },
-  'subnasale-infratip', R => { const s0 = R('subnasale'), a = R('infratip'), L = Math.hypot(a.x - s0.x, a.y - s0.y), B = { x: s0.x + PC.f * L, y: s0.y }; return [{ v: s0, a, b: B, dash: [[s0, B]] }]; },
-  { dom: [20, 50] });
+tm('Frankfort-tip Angle', 'Угол между франкфуртской горизонталью и линией от субназале через инфратип, продолженной до этой горизонтали', 32, 38, [8, 12, 18], [8, 12, 18], '°',
+  () => { const s0 = Qk('subnasale'), inf = Qk('infratip'), fy = (Qk('porion').y + Qk('orbitale').y) / 2, P0 = zHit(s0, inf, fy); return P0 ? angV({ x: -PC.f, y: 0 }, sub(s0, P0)) : NaN; },
+  '', R => { const s0 = R('subnasale'), inf = R('infratip'), P0 = zHit(s0, inf, fhY(R)); if (!P0) return []; const L = Math.hypot(s0.x - P0.x, s0.y - P0.y) * .8, B = { x: P0.x - PC.f * L, y: P0.y }; return [{ v: P0, a: s0, b: B, dash: [[P0, B]] }]; },
+  { dom: [20, 50], keys: ['subnasale', 'infratip', 'porion', 'orbitale'], ex: R => { const s0 = R('subnasale'), inf = R('infratip'), P0 = zHit(s0, inf, fhY(R)); return { full: [hline(fhY(R))], sg: P0 ? [[s0, P0], [s0, inf]] : [] }; } });
 tm('Z Angle', 'Угол между франкфуртской плоскостью и линией подбородок — супратип, продолженной до плоскости', 78, 82, [5, 10, 15, 22], [5, 10, 15, 22], '°',
   () => { const pg = Qk('pogonion'), st = Qk('supratip'), fy = (Qk('porion').y + Qk('orbitale').y) / 2, P0 = zHit(pg, st, fy); return P0 ? angV({ x: -PC.f, y: 0 }, sub(pg, P0)) : NaN; },
   '', R => { const pg = R('pogonion'), st = R('supratip'), P0 = zHit(pg, st, fhY(R)); if (!P0) return []; const L = Math.hypot(pg.x - P0.x, pg.y - P0.y) * .8; return [{ v: P0, a: pg, b: { x: P0.x - PC.f * L, y: P0.y }, dash: [[P0, { x: P0.x - PC.f * L, y: P0.y }]] }]; },
@@ -729,7 +729,13 @@ function pGeom(m, rot) {
   return { sg, an, dash: [...an.flatMap(q => q.dash || []), ...(ex.dash || [])], full };
 }
 function pMeasureSvg(m) {
-  const rot = profRot(cur.ppts), g = pGeom(m, rot), vb = viewBoxFor(geomPts(g));
+  const rot = profRot(cur.ppts), g = pGeom(m, rot);
+  let vb;
+  if (m.wide) {                                   // показать всё фото целиком (с учётом поворота)
+    const c = [[0, 0], [cur.pw, 0], [cur.pw, cur.ph], [0, cur.ph]].map(([x, y]) => rotPt({ x, y }, rot));
+    const x0 = Math.min(...c.map(p => p.x)), x1 = Math.max(...c.map(p => p.x)), y0 = Math.min(...c.map(p => p.y)), y1 = Math.max(...c.map(p => p.y));
+    vb = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  } else vb = viewBoxFor(geomPts(g));
   return svgBase(vb, rot, '', { img: cur.pimg, w: cur.pw, h: cur.ph }) + geomSvg(g, vb.w) + '</svg>';
 }
 function togglePMetric(i) {
