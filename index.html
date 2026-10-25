@@ -79,7 +79,7 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 .rrow>span{flex:1}.rrow b{color:var(--teal);font-size:16px}.rrow em{color:#aab8bd;font-style:normal}
 .refpair{display:flex;gap:8px;margin-top:12px}
 .refpair figure{margin:0;flex:1;min-width:0}
-.refpair figcaption{font-size:12px;color:var(--mute);margin-top:4px;line-height:1.25}
+.refpair figcaption{font-size:12px;color:var(--mute);margin-top:4px;line-height:1.25;word-break:break-all}
 .cv{width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;background:#2a3438;display:block}
 .strip{display:flex;gap:6px;overflow-x:auto;margin:10px 0 4px;padding-bottom:4px;position:relative}
 .strip figure{margin:0;flex:0 0 62px;text-align:center;font-size:11px;color:var(--mute);border:2px solid transparent;border-radius:12px;padding:2px;cursor:pointer}
@@ -228,9 +228,6 @@ pair('$Cheek', 'f', '{} скула', 'Zygion',
 
 /* =====================================================================
    4. ГЕОМЕТРИЯ
-   Все метрики читают «текущее лицо» через useFace(). Если включено выравнивание,
-   точки поворачиваются так, чтобы линия зрачков была горизонтальной
-   (наклон головы на фото не искажает вертикальные метрики).
    ===================================================================== */
 let CTX = { pts: {}, rot: 0 };
 const VIRT = {                               // вычисляемые точки
@@ -254,8 +251,6 @@ function faceRot(pts) {                      // угол поворота, пр�
 }
 function useFace(pts, level) { CTX = { pts, rot: level ? faceRot(pts) : 0 }; }
 const P = k => rotPt(raw(k), CTX.rot);   // координаты для расчётов (с выравниванием)
-/* Ширина между левой и правой точкой — строго по горизонтали, высота между точками по центру лица — строго по вертикали.
-   Остальные расстояния (ширина глаза, длина брови и т.п.) — по прямой. */
 const MID = new Set(['hairline', 'G', 'BH', 'PM', 'ZM', 'BM', 'nasalBase', 'noseBottom', 'chinBottom', 'innerCupidsBow', 'cupidsBow', 'lowerLip', 'mouthMiddle']);
 const sideOf = k => { let m = k.match(/^(left|right)(.+)$/); if (m) return [m[1], m[2]]; m = k.match(/^(.+?)(Left|Right)$/); return m ? [m[2].toLowerCase(), m[1]] : null; };
 const isMirror = (a, b) => { const x = sideOf(a), y = sideOf(b); return !!x && !!y && x[0] !== y[0] && x[1] === y[1]; };
@@ -290,8 +285,6 @@ const jaw = () => d('leftEarGonion', 'rightEarGonion') / zy();          // Jaw W
 const third = i => { const t = [d('hairline', 'G'), d('G', 'noseBottom'), d('noseBottom', 'chinBottom')]; return t[i] / (t[0] + t[1] + t[2]) * 100; };
 const ZY = 'leftCheek-rightCheek';
 
-/* Углы для визуализации: каждая функция получает R(ключ) → точка в выровненной системе
-   и возвращает дуги {v: вершина, a, b: концы лучей, dash: пунктирные линии}. */
 const tri = (R, v, a, b) => ({ v: R(v), a: R(a), b: R(b), dash: [] });
 const hz = (R, v, a) => {                   // угол между лучом v→a и горизонталью
   const V = R(v), A = R(a), B = { x: V.x + (A.x >= V.x ? 1 : -1) * Math.abs(A.x - V.x), y: V.y };
@@ -313,14 +306,10 @@ const browGeom = R => sides(s => tri(R, s + 'BrowInnerCorner', s + 'BrowArch', s
 
 /* =====================================================================
    5. МЕТРИКИ
-   metric(название, пояснение, min, max, единица, вес, формула, линии замера, углы, solo)
-   В линиях замера «$» = обе стороны (left/right).
-   solo = точки метрики правятся отдельно и не меняют остальные метрики.
    ===================================================================== */
 const M = [];
 const metric = (name, ds, min, max, u, w, f, ln, an, solo) => M.push({ name, ds, min, max, u, w, f, ln, an, solo });
 
-/* Расшифровки названий */
 const FULL = {
   'FWHR': 'Facial Width-to-Height Ratio',
   'Total FWHR': 'Total Facial Width-to-Height Ratio',
@@ -414,13 +403,6 @@ metric('PFL to Biozygo', 'Ширина глаза к ширине скул', 19.
 
 /* =====================================================================
    6. ОЦЕНКА
-   Оценка метрики — отклонение от идеального диапазона, в процентах:
-     ниже нормы:  (мин − значение) / мин × 100
-     выше нормы:  (значение − макс) / макс × 100
-     внутри нормы: 0
-   Балл метрики (для итога): 10 − отклонение / DEV_STEP, не меньше 0.
-   Итоговая оценка = сумма баллов / количество метрик.
-   Дополнительно: средневзвешенное отклонение (веса w метрик).
    ===================================================================== */
 const DEV_STEP = 2;                                  // сколько % отклонения снимает 1 балл
 const tolOf = m => Math.max((m.max - m.min) / 2, 1e-9);
@@ -432,7 +414,6 @@ function scoreMetric(m, v) {
 }
 const fmtDev = x => x.toFixed(1) + '%';
 
-/* точки метрики: у «solo»-метрик правки хранятся отдельно (cur.own) и не трогают общие точки */
 const ptsOf = m => (m.solo && cur?.own?.[m.name]) ? { ...cur.pts, ...cur.own[m.name] } : cur.pts;
 
 function analyze(pts, level, own) {
@@ -446,8 +427,8 @@ function analyze(pts, level, own) {
   const sum = R.reduce((t, m) => t + m.score, 0);
   const harmony = Math.min(10, sum / R.length);
   const wsum = R.reduce((t, m) => t + m.w, 0);
-  const wdev = R.reduce((t, m) => t + m.dev * m.w, 0) / wsum;       // средневзвешенное отклонение, %
-  R.forEach(m => m.cost = (10 - m.score) / R.length);            // вклад метрики в снижение оценки; сумма = 10 − оценка
+  const wdev = R.reduce((t, m) => t + m.dev * m.w, 0) / wsum;
+  R.forEach(m => m.cost = (10 - m.score) / R.length);
   return { R, harmony, sum, wdev };
 }
 const fmtVal = (v, u) => v.toFixed(2) + u;
@@ -629,8 +610,6 @@ const segs = ln => ln.split(',')
   .map(s => s.split('-'));
 
 const faceFrame = () => Settings.level ? faceRot(cur.pts) : 0;
-/* геометрия замера в выровненной системе: ширины — горизонтальные, высоты по центру лица — вертикальные;
-   плюс дуги углов (an) и пунктирные продолжения */
 function frameGeom(m, rot) {
   CTX = { pts: ptsOf(m), rot: 0 };
   const R = k => rotPt(raw(k), rot);
@@ -652,7 +631,6 @@ function viewBoxFor(pts) {
 }
 const svgBase = (vb, rot, attrs = '') => `<svg ${attrs} viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"><image href="${cur.img}" width="${cur.w}" height="${cur.h}" transform="rotate(${deg(rot)})"/>`;
 
-/* дуга угла: сектор, контур и подпись со значением (цвет сектора — из настроек) */
 function arcSvg(q, vbw, sw) {
   const ua = sub(q.a, q.v), ub = sub(q.b, q.v), la = Math.hypot(ua.x, ua.y), lb = Math.hypot(ub.x, ub.y);
   if (!la || !lb) return '';
@@ -667,7 +645,6 @@ function arcSvg(q, vbw, sw) {
   return `<path d="M${q.v.x} ${q.v.y} L${p1.x} ${p1.y} A${r} ${r} 0 0 ${sweep} ${p2.x} ${p2.y}Z" fill="${Settings.line}" fill-opacity=".35" stroke="${Settings.line}" stroke-width="${sw * .9}" stroke-linejoin="round"/>` +
     `<text x="${q.v.x + bx * tr}" y="${q.v.y + by * tr}" font-size="${fs}" font-weight="700" font-family="Manrope,system-ui,sans-serif" text-anchor="middle" dominant-baseline="central" fill="#fff" stroke="#031519" stroke-opacity=".75" stroke-width="${fs * .22}" paint-order="stroke" stroke-linejoin="round">${angV(ua, ub).toFixed(1)}°</text>`;
 }
-/* линии: тёмный ореол + линия цвета из настроек с круглыми концами, пунктир для продолжений */
 function geomSvg(g, vbw, ends = true) {
   const sw = vbw / 230, C = Settings.line;
   const ln = (a, b, w, extra) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${w}" stroke-linecap="round" ${extra}/>`;
@@ -696,8 +673,8 @@ function toggleMetric(i) {
 }
 
 /* ---------- правка точек прямо по схеме замера ---------- */
-const fixEdit = () => fix.m.solo ? cur.own[fix.m.name] : cur.pts;   // где лежат редактируемые точки
-function fixSeed() {                                                // solo: отдельная копия нужных точек
+const fixEdit = () => fix.m.solo ? cur.own[fix.m.name] : cur.pts;
+function fixSeed() {
   if (!fix.m.solo) return;
   cur.own = cur.own || {};
   const o = cur.own[fix.m.name] = cur.own[fix.m.name] || {};
@@ -756,7 +733,7 @@ function bindFix() {
   svg.onpointermove = e => {
     if (!grab) return;
     const f = toFrame(e), X = f.x + grab.dx, Y = f.y + grab.dy, c = Math.cos(fix.rot), s = Math.sin(fix.rot);
-    fixEdit()[grab.k] = { x: clamp(X * c + Y * s, 0, cur.w), y: clamp(-X * s + Y * c, 0, cur.h) };   // обратный поворот в координаты фото
+    fixEdit()[grab.k] = { x: clamp(X * c + Y * s, 0, cur.w), y: clamp(-X * s + Y * c, 0, cur.h) };
     fixDraw(); fixInfo(); loupe(grab.k);
   };
   const end = () => { if (!grab) return; grab = null; lpw.style.display = 'none'; persist(); };
@@ -780,25 +757,15 @@ function renderGuide() {
 /* =====================================================================
    9. КОНТУРЫ ОБЛАСТЕЙ И ОЦЕНКА ПО ЭТАЛОНАМ (Angularity / Dimorphism / Misc)
 
-   Для каждой метрики контур строится автоматически по уже поставленным 48 точкам
-   (никакой отдельной разметки не нужно). Если точки правят — контур перестраивается.
-   Контур — гладкая кривая Катмулла–Рома, острые углы (уголки глаз, концы бровей,
-   уголки рта) задаются через corners. Фото выравнивается по линии зрачков.
-   Обрезок: затемнено всё вокруг, область обведена белой линией — как на эталонах.
-
-   Эталоны лежат рядом с index.html:
-     ref/<male|female>/<Angularity|Dimorphism|Misc>/<Название метрики>/frame_0000..0039.webp
+   Эталоны лежат в репозитории по пути:
+     Yanmaya analysis/ref/<male|female>/<Angularity|Dimorphism|Misc>/<папка метрики>/frame_0000..0039.webp
    Пользователь выбирает самый похожий кадр, его номер → оценка 0–10 (refScore).
    ===================================================================== */
-const REF_DIR = 'ref';
+const REF_DIR = 'Yanmaya analysis/ref';                      // путь к эталонам от index.html (регистр и пробелы важны)
 const FRAMES = 40;
 const refScore = i => i / (FRAMES - 1) * 10;                // кадр 0 → 0, кадр 39 → 10
 const GROUPS = { ANGU: { dir: 'Angularity', ru: 'Angularity' }, DIMO: { dir: 'Dimorphism', ru: 'Диморфизм' }, MISC: { dir: 'Misc', ru: 'Misc' } };
 
-/* Описание области. Элемент точки: 'ключ' или ['ключ', наружу, вниз] — смещение в долях высоты лица
-   (наружу — от средней линии лица, вниз — по вертикали; отрицательное — внутрь / вверх).
-   sort — упорядочить точки по углу вокруг центра, poly — прямые линии без сглаживания,
-   corners — ключи точек с острым углом, lips — готовая форма губ. */
 const REGIONS = {};
 const reg = (key, g, ru, parts, only) => { REGIONS[key] = { g, ru, parts, only }; };
 const eyeP = s => ({ p: [s + 'EyeMedialCanthus', s + 'EyeUpperEyelid', s + 'EyeLateralCanthus', s + 'EyeLowerEyelid'], corners: [s + 'EyeMedialCanthus', s + 'EyeLateralCanthus'] });
@@ -862,7 +829,6 @@ function crSeg(Pn, closed) {
   if (!closed) out.push(Pn[n - 1]);
   return out;
 }
-/* Замкнутый контур: гладкий, но с острыми углами в точках corners (индексы) */
 function shapeOf(pts, corners, poly) {
   if (poly || pts.length < 3) return pts;
   if (!corners.length) return crSeg(pts, true);
@@ -875,21 +841,20 @@ function shapeOf(pts, corners, poly) {
   });
   return out;
 }
-/* Контуры области в выровненной системе координат: [{poly, lines}] */
 function regionPaths(key) {
   const rot = faceFrame();
   CTX = { pts: cur.pts, rot: 0 };
   const L = k => rotPt(raw(k), rot);
-  const H = Math.abs(L('chinBottom').y - L('hairline').y) || 1;                                   // высота лица — единица смещений
-  const cx = ['hairline', 'innerCupidsBow', 'noseBottom', 'chinBottom'].reduce((t, k) => t + L(k).x, 0) / 4;   // средняя линия лица
+  const H = Math.abs(L('chinBottom').y - L('hairline').y) || 1;
+  const cx = ['hairline', 'innerCupidsBow', 'noseBottom', 'chinBottom'].reduce((t, k) => t + L(k).x, 0) / 4;
   const el = e => { const [k, ox = 0, oy = 0] = Array.isArray(e) ? e : [e], p = L(k); return { x: p.x + (p.x < cx ? -1 : 1) * ox * H, y: p.y + oy * H, k }; };
   return REGIONS[key].parts.map(part => {
     let pts, corners = [], lines = [];
     if (part.lips) {
       const [a, b] = [L('mouthLeft'), L('mouthRight')].sort((u, v) => u.x - v.x), c = L('cupidsBow'),
-            m = { x: 2 * cx - c.x, y: c.y }, [p1, p2] = [c, m].sort((u, v) => u.x - v.x);   // второй пик — зеркально
+            m = { x: 2 * cx - c.x, y: c.y }, [p1, p2] = [c, m].sort((u, v) => u.x - v.x);
       pts = [a, p1, L('innerCupidsBow'), p2, b, L('lowerLip')]; corners = [0, 4];
-      lines = [crSeg([a, L('mouthMiddle'), b], false)];                                        // линия смыкания губ
+      lines = [crSeg([a, L('mouthMiddle'), b], false)];
     } else {
       pts = part.p.map(el);
       if (part.sort) { const c = mean(pts); pts.sort((u, v) => Math.atan2(u.y - c.y, u.x - c.x) - Math.atan2(v.y - c.y, v.x - c.x)); }
@@ -899,7 +864,6 @@ function regionPaths(key) {
   });
 }
 
-/* Картинка контура: фото по центру области, всё вокруг затемнено, область обведена */
 const imgCache = {};
 const getImg = async () => imgCache[cur.id] || (imgCache[cur.id] = await new Promise((ok, fail) => {
   const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = cur.img;
@@ -912,7 +876,7 @@ async function regionImage(key, px = 640) {
   const c = Object.assign(document.createElement('canvas'), { width: px, height: px }), g = c.getContext('2d');
   g.fillStyle = '#566064'; g.fillRect(0, 0, px, px);
   g.save(); g.scale(k, k); g.translate(-ox, -oy); g.rotate(rot); g.drawImage(im, 0, 0, cur.w, cur.h); g.restore();
-  const m = Object.assign(document.createElement('canvas'), { width: px, height: px }), mg = m.getContext('2d');   // затемнение с «окнами»
+  const m = Object.assign(document.createElement('canvas'), { width: px, height: px }), mg = m.getContext('2d');
   mg.fillStyle = 'rgba(16,24,28,.72)'; mg.fillRect(0, 0, px, px);
   mg.globalCompositeOperation = 'destination-out';
   mg.save(); mg.scale(k, k); mg.translate(-ox, -oy); parts.forEach(p => { trace(mg, p.poly, true); mg.fill(); }); mg.restore();
@@ -929,15 +893,22 @@ async function regionImage(key, px = 640) {
 const gender = () => cur.gender || 'male';
 const allKeys = () => Object.keys(REGIONS).filter(k => !REGIONS[k].only || REGIONS[k].only === gender());
 const fmtS = v => v == null ? '—' : v.toFixed(1);
-function groupScore(g) {                                   // группа = сумма баллов оценённых метрик / их число
+function groupScore(g) {
   const keys = allKeys().filter(k => REGIONS[k].g === g), done = keys.filter(k => cur.ref?.[k] != null);
   return { n: done.length, total: keys.length, score: done.length ? done.reduce((t, k) => t + refScore(cur.ref[k]), 0) / done.length : null };
 }
-const refPath = (key, i) => encodeURI(`${REF_DIR}/${gender()}/${GROUPS[REGIONS[key].g].dir}/${REGIONS[key].ru}/frame_${String(i).padStart(4, '0')}.webp`);
+
+/* Если имя папки с эталонами отличается от названия в приложении — укажите его здесь */
+const FOLDER = {
+  chinDef: 'Чёткость Подбородка',
+  dNose: 'Нос (Анфас)',
+  crows: 'Гусинные лапки',
+  darkCircles: 'Темные круги'
+};
+const refPath = (key, i) => encodeURI(`${REF_DIR}/${gender()}/${GROUPS[REGIONS[key].g].dir}/${FOLDER[key] || REGIONS[key].ru}/frame_${String(i).padStart(4, '0')}.webp`);
 
 /* ---------- итоговая формула ----------
-   Итог = 0.40·гармония + 0.15·диморфизм + 0.25·angularity + 0.20·misc
-   Итог показывается, только когда есть гармония и оценены все три группы. */
+   Итог = 0.40·гармония + 0.15·диморфизм + 0.25·angularity + 0.20·misc */
 const W = { harm: .4, dimo: .15, angu: .25, misc: .20 };
 const WNAME = { harm: 'Гармония', dimo: 'Диморфизм', angu: 'Angularity', misc: 'Misc' };
 function finalScore() {
@@ -1008,7 +979,7 @@ function refShow(save = true) {
   const { key, idx } = rate;
   if (save) { cur.ref = cur.ref || {}; cur.ref[key] = idx; persist(); }
   const rf = $('#rf'), done = cur.ref?.[key] != null;
-  rf.onerror = () => { rf.style.visibility = 'hidden'; $('#rcap').textContent = `Эталон ${idx}: файл не найден (${REF_DIR}/…)`; };
+  rf.onerror = () => { rf.style.visibility = 'hidden'; $('#rcap').textContent = `Не найден: ${decodeURI(refPath(key, idx))}`; };
   rf.onload = () => { rf.style.visibility = ''; };
   rf.src = refPath(key, idx);
   $('#rcap').textContent = `Эталон ${idx}` + (done ? ` · ${refScore(idx).toFixed(1)}/10` : ' · оценка не выбрана');
