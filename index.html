@@ -934,9 +934,40 @@ function groupScore(g) {                                   // группа = с�
   return { n: done.length, total: keys.length, score: done.length ? done.reduce((t, k) => t + refScore(cur.ref[k]), 0) / done.length : null };
 }
 const refPath = (key, i) => encodeURI(`${REF_DIR}/${gender()}/${GROUPS[REGIONS[key].g].dir}/${REGIONS[key].ru}/frame_${String(i).padStart(4, '0')}.webp`);
-const refCard = () => `<div class="card"><h3>Оценка по эталонам</h3>
-  ${['ANGU', 'DIMO', 'MISC'].map(g => { const s = groupScore(g); return `<div class="rrow" data-a="reflist"><span>${GROUPS[g].ru}<small class="full">оценено ${s.n} из ${s.total}</small></span><b>${fmtS(s.score)}</b><em>›</em></div>`; }).join('')}
-  <div class="row"><button class="btn" data-a="reflist">Оценить по контурам</button></div></div>`;
+
+/* ---------- итоговая формула ----------
+   Итог = 0.40·гармония + 0.15·диморфизм + 0.25·angularity + 0.20·misc
+   Итог показывается, только когда есть гармония и оценены все три группы. */
+const W = { harm: .4, dimo: .15, angu: .25, misc: .20 };
+const WNAME = { harm: 'Гармония', dimo: 'Диморфизм', angu: 'Angularity', misc: 'Misc' };
+function finalScore() {
+  const parts = {
+    harm: cur.harmony ?? null,
+    dimo: groupScore('DIMO').score,
+    angu: groupScore('ANGU').score,
+    misc: groupScore('MISC').score
+  };
+  const ready = Object.values(parts).every(v => v != null);
+  const total = ready ? W.harm * parts.harm + W.dimo * parts.dimo + W.angu * parts.angu + W.misc * parts.misc : null;
+  return { parts, ready, total };
+}
+const refCard = () => {
+  const f = finalScore();
+  const rows = Object.keys(W).map(k =>
+    `<div class="rrow"><span>${WNAME[k]}<small class="full">вес ${W[k]}</small></span><b>${fmtS(f.parts[k])}</b></div>`
+  ).join('');
+  const groups = ['ANGU', 'DIMO', 'MISC'].map(g => {
+    const s = groupScore(g);
+    return `<div class="rrow" data-a="reflist"><span>${GROUPS[g].ru}<small class="full">оценено ${s.n} из ${s.total}</small></span><b>${fmtS(s.score)}</b><em>›</em></div>`;
+  }).join('');
+  return `<div class="card"><h3>Итоговая оценка</h3>
+    ${rows}
+    <div class="rrow"><span><b>Итог</b><small class="full">${f.ready ? '0.40·гармония + 0.15·диморфизм + 0.25·angularity + 0.20·misc' : 'Оцените все три группы, чтобы получить итог'}</small></span>
+      <b class="sc">${f.ready ? f.total.toFixed(1) : '—'}<small style="font-size:12px;color:var(--mute)">/10</small></b></div>
+    <h3 style="margin-top:14px">Ручная оценка по эталонам</h3>
+    ${groups}
+    <div class="row"><button class="btn" data-a="reflist">Оценить по контурам</button></div></div>`;
+};
 
 /* ---------- список групп и метрик ---------- */
 function renderRefList() {
@@ -965,6 +996,7 @@ function renderRefRate(key) {
     <div class="card"><input type="range" id="rs" min="0" max="${FRAMES - 1}" value="${rate.idx}" style="width:100%;accent-color:var(--teal)">
       <div class="strip" id="strip">${strip}</div>
       <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего.</p>
+      <div class="row"><button class="btn sec" data-a="rsave">Сохранить оценку</button></div>
       <button class="lnk" data-a="rclr">Сбросить оценку</button></div>
     <div class="nav"><button class="btn sec sq" data-a="rprev">‹</button>
       <select id="rsel">${keys.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${cur.ref?.[k] != null ? '✓ ' : ''}${REGIONS[k].ru}</option>`).join('')}</select>
@@ -1030,6 +1062,7 @@ const ACTIONS = {
   gender({ v }) { cur.gender = v; persist(); renderRefList(); },
   rrate({ k }) { renderRefRate(k); scrollTo(0, 0); },
   rpick({ i }) { rate.idx = +i; refShow(true); haptic(); },
+  rsave() { refShow(true); haptic(); toast('Оценка сохранена'); },
   rclr() { delete cur.ref[rate.key]; persist(); refShow(false); },
   rprev: () => rateStep(-1),
   rnext: () => rateStep(1),
