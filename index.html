@@ -696,11 +696,6 @@ tm('Interior Midface Projection Angle', 'Угол в субаларе между
   'subalare-eyelidEnd', R => { const s0 = R('subalare'), e = R('eyelidEnd'), X = { x: e.x, y: s0.y }; return [{ v: s0, a: e, b: X, dash: [[s0, X], [e, X]] }]; });
 tm('Anterior Facial Depth', 'Угол в субаларе между линиями к трагиону и к нижнему веку', 64.5, 67.5, [8, 16, 24, 32], [8, 16, 24, 32], '°',
   () => pang('subalare', 'tragus', 'lowerEyelid'), 'subalare-tragus,subalare-lowerEyelid', A3('subalare', 'tragus', 'lowerEyelid'));
-const ftPts = R => { const s0 = R('subnasale'), inf = R('infratip'), P0 = zHit(s0, inf, fhY(R)); if (!P0) return null; const L = Math.hypot(s0.x - P0.x, s0.y - P0.y); return { s0, P0, B: { x: P0.x - PC.f * L * 1.9, y: P0.y } }; };
-tm('Frankfort-tip Angle', 'Угол между франкфуртской горизонталью и линией от субназале через инфратип, продолженной до этой горизонтали', 32, 38, [8, 12, 18], [8, 12, 18], '°',
-  () => { const s0 = Qk('subnasale'), inf = Qk('infratip'), fy = (Qk('porion').y + Qk('orbitale').y) / 2, P0 = zHit(s0, inf, fy); return P0 ? angV({ x: -PC.f, y: 0 }, sub(s0, P0)) : NaN; },
-  '', R => { const t = ftPts(R); return t ? [{ v: t.P0, a: t.s0, b: { x: t.P0.x - PC.f * Math.hypot(t.s0.x - t.P0.x, t.s0.y - t.P0.y), y: t.P0.y }, dash: [] }] : []; },
-  { dom: [20, 50], clean: true, keys: ['subnasale', 'infratip', 'porion', 'orbitale'], ex: R => { const t = ftPts(R); return { sg: t ? [[t.B, t.P0], [t.P0, t.s0]] : [] }; } });
 tm('Z Angle', 'Угол между франкфуртской плоскостью и линией подбородок — супратип, продолженной до плоскости', 78, 82, [5, 10, 15, 22], [5, 10, 15, 22], '°',
   () => { const pg = Qk('pogonion'), st = Qk('supratip'), fy = (Qk('porion').y + Qk('orbitale').y) / 2, P0 = zHit(pg, st, fy); return P0 ? angV({ x: -PC.f, y: 0 }, sub(pg, P0)) : NaN; },
   '', R => { const pg = R('pogonion'), st = R('supratip'), P0 = zHit(pg, st, fhY(R)); if (!P0) return []; const L = Math.hypot(pg.x - P0.x, pg.y - P0.y) * .8; return [{ v: P0, a: pg, b: { x: P0.x - PC.f * L, y: P0.y }, dash: [[P0, { x: P0.x - PC.f * L, y: P0.y }]] }]; },
@@ -985,7 +980,7 @@ function overView() {
 
 const PCATS = [
   ['Челюсть и шея', ['Gonial Angle', 'Mandible Plane Angle', 'Ramus to Mandible', 'Submental Cervical Angle', 'Gonion to Mouth']],
-  ['Нос', ['Nasofrontal Angle', 'Nasofacial Angle', 'Nasolabial Angle', 'Nasal Projection', 'Nasal Width to Height Projection', 'Nasal Tip Angle', 'Nasomental Angle', 'Frankfort-tip Angle']],
+  ['Нос', ['Nasofrontal Angle', 'Nasofacial Angle', 'Nasolabial Angle', 'Nasal Projection', 'Nasal Width to Height Projection', 'Nasal Tip Angle', 'Nasomental Angle']],
   ['Выпуклость и подбородок', ['Facial Convexity Glabella', 'Total Facial Convexity', 'Facial Convexity Nasion', 'Recession Relative to Frankfort Plane', 'Z Angle']],
   ['Глубина и середина лица', ['Facial Depth to Height Ratio', 'Interior Midface Projection Angle', 'Anterior Facial Depth']],
   ['Губы', ['Mentolabial Angle', "Rickett's E-Line", 'Holdaway H-Line', 'Steiner S-Line', 'Burstone Line']],
