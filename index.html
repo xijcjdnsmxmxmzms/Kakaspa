@@ -57,6 +57,12 @@ p{margin:6px 0 0}
 #lp:before{left:50%;top:calc(50% - 9px);width:1px;height:18px}#lp:after{top:50%;left:calc(50% - 9px);height:1px;width:18px}
 .nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;max-width:560px;margin:0 auto;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:#fffffff2;backdrop-filter:blur(8px);border-top:1px solid var(--line);z-index:5}
 select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;background:#fff;padding:0 8px;font:600 13px Manrope;color:var(--ink)}
+/* вкладки-пилюли */
+.tabs{position:sticky;top:0;z-index:4;display:flex;gap:8px;overflow-x:auto;margin:10px -14px 0;padding:8px 14px;background:var(--bg);scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:0;border-radius:22px;padding:10px 18px;font:700 14px Manrope,sans-serif;background:#fff;color:var(--mute);box-shadow:0 1px 6px #0a2a3512;cursor:pointer}
+.tabs button.on{background:#1c2a30;color:#fff}
+.curve svg{width:100%;display:block}
 /* результат */
 .hero{position:relative;border-radius:24px;overflow:hidden;line-height:0;background:#222}
 .hero img{width:100%;max-height:70vh;object-fit:cover}
@@ -77,10 +83,11 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 /* оценка по эталонам и контуры */
 .rrow{display:flex;align-items:center;gap:8px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer;font-size:14px}
 .rrow>span{flex:1}.rrow b{color:var(--teal);font-size:16px}.rrow em{color:#aab8bd;font-style:normal}
-.refpair{display:flex;gap:8px;margin-top:12px}
+.refpair{display:flex;gap:8px;margin-top:12px;align-items:flex-start}
 .refpair figure{margin:0;flex:1;min-width:0}
 .refpair figcaption{font-size:12px;color:var(--mute);margin-top:4px;line-height:1.25;word-break:break-all}
-.cv{width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;background:#2a3438;display:block}
+/* contain — кадр показывается целиком, ничего не обрезается */
+.cv{width:100%;aspect-ratio:1;object-fit:contain;border-radius:16px;background:#2a3438;display:block;cursor:zoom-in}
 .strip{display:flex;gap:6px;overflow-x:auto;margin:10px 0 4px;padding-bottom:4px;position:relative}
 .strip figure{margin:0;flex:0 0 62px;text-align:center;font-size:11px;color:var(--mute);border:2px solid transparent;border-radius:12px;padding:2px;cursor:pointer}
 .strip figure.on{border-color:var(--teal);color:var(--teal)}
@@ -435,6 +442,39 @@ const fmtVal = (v, u) => v.toFixed(2) + u;
 const label = h => h >= 9 ? 'Отличная гармония' : h >= 8 ? 'Очень хорошая гармония' : h >= 7 ? 'Хорошая гармония' : h >= 5 ? 'Средняя гармония' : 'Низкая гармония';
 
 /* =====================================================================
+   6б. КРИВАЯ РАСПРЕДЕЛЕНИЯ И «TOP %»
+   Данные таблицы: оценка → процентиль (%). Для оценок < 5 «Top» считается зеркально.
+   ===================================================================== */
+const CURVE = [[0,0],[.25,0],[.5,.00002],[.75,.00008],[1,.0004],[1.25,.00174],[1.5,.00681],[1.75,.024],[2,.078],[2.25,.23],[2.5,.61],[2.75,1.46],[3,3.2],[3.25,6.34],[3.5,11.39],[3.75,18.55],[4,27.42],[4.25,36.75],[4.5,44.68],[4.75,49.26],
+  [5,49.26],[5.25,44.68],[5.5,36.75],[5.75,27.42],[6,18.55],[6.25,8.10],[6.5,3.70],[6.75,2.03],[7,1.46],[7.25,.61],[7.5,.12],[7.75,.08],[8,.02],[8.25,.00681],[8.5,.00054],[8.75,.0001589],[9,.0000841],[9.25,.000016],[9.5,.0000028],[9.75,.0000004],[10,.0000001]];
+function pctAt(x) {                                  // линейная интерполяция по таблице
+  x = clamp(x, 0, 10);
+  for (let i = 1; i < CURVE.length; i++) {
+    const [a, ya] = CURVE[i - 1], [b, yb] = CURVE[i];
+    if (x <= b) return ya + (yb - ya) * (x - a) / (b - a);
+  }
+  return 0;
+}
+const topOf = s => s >= 5 ? pctAt(s) : 100 - pctAt(10 - s);
+const fmtTop = t => t >= 10 ? t.toFixed(1) : t >= 0.1 ? t.toFixed(2) : t.toPrecision(2);
+function curveSvg(s) {
+  const X = v => 30 + 300 * v / 10, Y = p => 190 - 150 * Math.min(p, 50) / 50;
+  const pts = crSeg(CURVE.map(([r, p]) => ({ x: X(r), y: Y(p) })), false).map(q => ({ x: q.x, y: Math.min(190, q.y) }));
+  const dd = 'M' + pts.map(q => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join('L');
+  let g = '';
+  [0, 10, 20, 30, 40].forEach(v => { g += `<line x1="30" x2="330" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee"/><text x="24" y="${Y(v) + 3}" font-size="9" fill="#9aabb1" text-anchor="end">${v}</text>`; });
+  for (let i = 0; i <= 10; i++) g += `<text x="${X(i)}" y="208" font-size="10" fill="#7b8d93" text-anchor="middle">${i}</text>`;
+  let mk = '';
+  if (s != null) {
+    const x = X(clamp(s, 0, 10)), t = topOf(s), w = 138, lx = clamp(x, 30 + w / 2, 330 - w / 2);
+    mk = `<line x1="${x}" x2="${x}" y1="30" y2="190" stroke="#b8a25a" stroke-width="2"/>
+      <rect x="${lx - w / 2}" y="4" width="${w}" height="24" rx="12" fill="#fff" stroke="#e3d9a8" stroke-width="1.5"/>
+      <text x="${lx}" y="20" font-size="11" font-weight="700" fill="#9a8540" text-anchor="middle" font-family="Manrope,system-ui,sans-serif">${s.toFixed(2)} · Top ${fmtTop(t)}%</text>`;
+  }
+  return `<svg viewBox="0 0 340 222">${g}<path d="${dd}L330 190L30 190Z" fill="#9aa5aa" fill-opacity=".1"/><path d="${dd}" fill="none" stroke="#9aa5aa" stroke-width="2.2"/>${mk}</svg>`;
+}
+
+/* =====================================================================
    7. ЗАПИСИ ИСТОРИИ
    ===================================================================== */
 let cur = null;                                  // открытая запись
@@ -477,7 +517,7 @@ async function migrateOldDraft() {              // перенос чернови
    8. ЭКРАНЫ
    ===================================================================== */
 const app = $('#app');
-let view = 'home', guideFrom = 'home', RES = [], fix = null;
+let view = 'home', guideFrom = 'home', RES = [], fix = null, tab = 'over';
 const dgm = (k, cls = '') => `<img class="${cls}" src="${IMG_DIR}/${k}.webp" loading="lazy" alt="" onerror="this.closest('.dgw,.gl figure')?.remove?.();this.remove()">`;
 const render = (v, html, nav = false) => {
   view = v; app.innerHTML = html; app.classList.toggle('has-nav', nav);
@@ -574,15 +614,31 @@ function step(s) {
 function finish() {
   const miss = PTS.findIndex(p => !cur.pts[p.k]);
   if (miss >= 0) { cur.i = miss; persist(); renderMark(); scrollTo(0, 0); return toast(`Не поставлена точка: ${PTS[miss].ru}`); }
-  renderResult();
+  renderResult(null, 'over');
 }
 
-/* ---------- результат ---------- */
-function renderResult(openI = null) {
-  cur.i = 0;
-  const { R, harmony, sum, wdev } = analyze(cur.pts, Settings.level, cur.own);
-  cur.harmony = harmony; cur.tier = null; persist(true);
-  RES = R;
+/* ---------- результат: вкладки-пилюли ---------- */
+const TABS = [['over', 'Обзор'], ['harm', 'Гармония'], ['ANGU', 'Ангулярити'], ['DIMO', 'Диморфизм'], ['MISC', 'Misc']];
+const heroHtml = (t, sc, sub) => `<div class="hero" style="margin-top:12px"><img src="${cur.img}" alt=""><div><span style="font-size:15px;opacity:1">${t}</span>
+  <p style="text-align:right;margin:0"><b>${sc}</b><small style="color:#fffc"> /10</small><span>${sub}</span></p></div></div>`;
+const scoreHtml = v => `<b class="sc">${fmtS(v)}<small style="font-size:12px;color:var(--mute)">/10</small></b>`;
+
+function overView() {
+  const f = finalScore(), top = f.ready ? topOf(f.total) : null;
+  const tabOf = k => k === 'harm' ? 'harm' : k.toUpperCase();
+  const rows = Object.keys(W).map(k =>
+    `<div class="rrow" data-a="tab" data-t="${tabOf(k)}"><span>${WNAME[k]}<small class="full">вес ${W[k]}</small></span><b>${fmtS(f.parts[k])}</b><em>›</em></div>`).join('');
+  return heroHtml('Итоговая оценка', f.ready ? f.total.toFixed(1) : '—', f.ready ? `Top ${fmtTop(top)}%` : 'Оцените все 4 столпа') +
+    `<div class="card curve"><h3>Где вы в популяции</h3>${curveSvg(f.ready ? f.total : null)}
+      ${f.ready ? `<p class="mute" style="font-size:12px">Примерно 1 из ${Math.round(100 / top).toLocaleString('ru-RU')} человек${topOf(f.total) < 50 ? '' : ' и чаще'}.</p>`
+                : '<p class="mute" style="font-size:12px">Метка появится, когда будут оценены все 4 столпа.</p>'}</div>
+    <div class="card"><h3>Столпы</h3>${rows}
+      <div class="rrow" style="cursor:default"><span><b>Итог</b><small class="full">${f.ready ? '0.40·гармония + 0.15·диморфизм + 0.25·ангулярити + 0.20·misc' : 'Оцените все 4 столпа, чтобы получить итог'}</small></span>
+        <b class="sc">${f.ready ? f.total.toFixed(1) : '—'}<small style="font-size:12px;color:var(--mute)">/10</small></b></div></div>`;
+}
+
+function harmView(A) {
+  const { R, harmony, sum } = A;
   const best = [...R].sort((a, b) => b.score - a.score || a.off - b.off).slice(0, 3);
   const worst = [...R].sort((a, b) => b.cost - a.cost).filter(m => m.cost > 1e-6).slice(0, 3);
   const pill = (m, i) => {
@@ -590,18 +646,35 @@ function renderResult(openI = null) {
     return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div>
       <div class="zone"><i style="left:${pos}%"></i></div><div class="det"></div></div>`;
   };
-  render('result', `<h1>Patrick analysis</h1><div class="mute">${fmtDate(cur.updated)} · сохранено в истории</div>
-    <div class="hero" style="margin-top:12px"><img src="${cur.img}" alt=""><div><span style="font-size:15px;opacity:1">Front Harmony<br>Score</span>
-      <p style="text-align:right;margin:0"><b>${harmony.toFixed(1)}</b><small style="color:#fffc"> /10</small><span>${label(harmony)}</span></p></div></div>
-    <div class="card st"><b>Сильные стороны:</b><ul>${best.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('')}</ul>
+  return heroHtml('Front Harmony<br>Score', harmony.toFixed(1), `${label(harmony)} · Top ${fmtTop(topOf(harmony))}%`) +
+    `<div class="card st"><b>Сильные стороны:</b><ul>${best.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('')}</ul>
       <p style="margin-top:12px"><b>Наибольший вклад в штраф:</b></p>
       <ul>${worst.length ? worst.map(m => `<li>${m.name} — ${m.score.toFixed(1)}/10</li>`).join('') : '<li>Нет штрафов</li>'}</ul>
       <p class="mute" style="margin-top:12px">Сумма баллов: <b>${sum.toFixed(1)}</b> · метрик: <b>${R.length}</b> · оценка = ${sum.toFixed(1)} / ${R.length}</p></div>
-    ${refCard()}
-    <h2>Ваши пропорции</h2>${R.map(pill).join('')}
+    <h2>Ваши пропорции</h2>${R.map(pill).join('')}`;
+}
+
+function groupView(g) {
+  const s = groupScore(g), keys = allKeys().filter(k => REGIONS[k].g === g), top = s.score != null ? topOf(s.score) : null;
+  return `<div class="card"><div class="top"><h3>${GROUPS[g].ru}</h3>${scoreHtml(s.score)}</div>
+    <div class="mute" style="font-size:12px">оценено ${s.n} из ${s.total}${top != null ? ` · Top ${fmtTop(top)}%` : ''}</div>
+    <div class="row"><button class="btn ${gender() === 'male' ? '' : 'sec'}" data-a="gender" data-v="male">Мужчина</button><button class="btn ${gender() === 'female' ? '' : 'sec'}" data-a="gender" data-v="female">Женщина</button></div>
+    <div style="margin-top:8px">${keys.map(k => { const v = cur.ref?.[k]; return `<div class="rrow" data-a="rrate" data-k="${k}"><span>${REGIONS[k].ru}</span><b>${v == null ? '—' : refScore(v).toFixed(1)}</b><em>›</em></div>`; }).join('')}</div>
+    <p class="mute" style="font-size:12px">Выберите область и сравните свой контур с эталонными кадрами.</p></div>`;
+}
+
+function renderResult(openI = null, t = tab) {
+  tab = t; cur.i = 0;
+  const A = analyze(cur.pts, Settings.level, cur.own);
+  cur.harmony = A.harmony; cur.tier = null; persist(true);
+  RES = A.R;
+  const tabs = `<div class="tabs">${TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-a="tab" data-t="${k}">${n}</button>`).join('')}</div>`;
+  const body = tab === 'over' ? overView() : tab === 'harm' ? harmView(A) : groupView(tab);
+  render('result', `<h1>Patrick analysis</h1><div class="mute">${fmtDate(cur.updated)} · сохранено в истории</div>${tabs}${body}
     <div class="row"><button class="btn sec" data-a="edit">Править точки</button><button class="btn sec" data-a="home">История</button></div>
     <div class="row"><button class="btn sec" data-a="guide">Справочник точек</button></div>`);
-  if (openI !== null) { toggleMetric(openI); $('#p' + openI)?.scrollIntoView({ block: 'center' }); }
+  $('.tabs .on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  if (openI !== null && tab === 'harm') { toggleMetric(openI); $('#p' + openI)?.scrollIntoView({ block: 'center' }); }
 }
 
 /* линии замера: «a-b,c-d», «$» → левая и правая сторона */
@@ -755,7 +828,7 @@ function renderGuide() {
 }
 
 /* =====================================================================
-   9. КОНТУРЫ ОБЛАСТЕЙ И ОЦЕНКА ПО ЭТАЛОНАМ (Angularity / Dimorphism / Misc)
+   9. КОНТУРЫ ОБЛАСТЕЙ И ОЦЕНКА ПО ЭТАЛОНАМ (Ангулярити / Диморфизм / Misc)
 
    Эталоны лежат в репозитории по пути:
      Yanmaya analysis/ref/<male|female>/<Angularity|Dimorphism|Misc>/<папка метрики>/frame_0000..0039.webp
@@ -764,7 +837,7 @@ function renderGuide() {
 const REF_DIR = 'Yanmaya analysis/ref';                      // путь к эталонам от index.html (регистр и пробелы важны)
 const FRAMES = 40;
 const refScore = i => i / (FRAMES - 1) * 10;                // кадр 0 → 0, кадр 39 → 10
-const GROUPS = { ANGU: { dir: 'Angularity', ru: 'Angularity' }, DIMO: { dir: 'Dimorphism', ru: 'Диморфизм' }, MISC: { dir: 'Misc', ru: 'Misc' } };
+const GROUPS = { ANGU: { dir: 'Angularity', ru: 'Ангулярити' }, DIMO: { dir: 'Dimorphism', ru: 'Диморфизм' }, MISC: { dir: 'Misc', ru: 'Misc' } };
 
 const REGIONS = {};
 const reg = (key, g, ru, parts, only) => { REGIONS[key] = { g, ru, parts, only }; };
@@ -908,9 +981,9 @@ const FOLDER = {
 const refPath = (key, i) => encodeURI(`${REF_DIR}/${gender()}/${GROUPS[REGIONS[key].g].dir}/${FOLDER[key] || REGIONS[key].ru}/frame_${String(i).padStart(4, '0')}.webp`);
 
 /* ---------- итоговая формула ----------
-   Итог = 0.40·гармония + 0.15·диморфизм + 0.25·angularity + 0.20·misc */
+   Итог = 0.40·гармония + 0.15·диморфизм + 0.25·ангулярити + 0.20·misc */
 const W = { harm: .4, dimo: .15, angu: .25, misc: .20 };
-const WNAME = { harm: 'Гармония', dimo: 'Диморфизм', angu: 'Angularity', misc: 'Misc' };
+const WNAME = { harm: 'Гармония', dimo: 'Диморфизм', angu: 'Ангулярити', misc: 'Misc' };
 function finalScore() {
   const parts = {
     harm: cur.harmony ?? null,
@@ -922,37 +995,6 @@ function finalScore() {
   const total = ready ? W.harm * parts.harm + W.dimo * parts.dimo + W.angu * parts.angu + W.misc * parts.misc : null;
   return { parts, ready, total };
 }
-const refCard = () => {
-  const f = finalScore();
-  const rows = Object.keys(W).map(k =>
-    `<div class="rrow"><span>${WNAME[k]}<small class="full">вес ${W[k]}</small></span><b>${fmtS(f.parts[k])}</b></div>`
-  ).join('');
-  const groups = ['ANGU', 'DIMO', 'MISC'].map(g => {
-    const s = groupScore(g);
-    return `<div class="rrow" data-a="reflist"><span>${GROUPS[g].ru}<small class="full">оценено ${s.n} из ${s.total}</small></span><b>${fmtS(s.score)}</b><em>›</em></div>`;
-  }).join('');
-  return `<div class="card"><h3>Итоговая оценка</h3>
-    ${rows}
-    <div class="rrow"><span><b>Итог</b><small class="full">${f.ready ? '0.40·гармония + 0.15·диморфизм + 0.25·angularity + 0.20·misc' : 'Оцените все три группы, чтобы получить итог'}</small></span>
-      <b class="sc">${f.ready ? f.total.toFixed(1) : '—'}<small style="font-size:12px;color:var(--mute)">/10</small></b></div>
-    <h3 style="margin-top:14px">Ручная оценка по эталонам</h3>
-    ${groups}
-    <div class="row"><button class="btn" data-a="reflist">Оценить по контурам</button></div></div>`;
-};
-
-/* ---------- список групп и метрик ---------- */
-function renderRefList() {
-  const card = g => {
-    const s = groupScore(g), keys = allKeys().filter(k => REGIONS[k].g === g);
-    return `<div class="card"><div class="top"><h3>${GROUPS[g].ru}</h3><b class="sc">${fmtS(s.score)}<small style="font-size:12px;color:var(--mute)">/10</small></b></div>
-      <div class="mute" style="font-size:12px">оценено ${s.n} из ${s.total}</div>
-      ${keys.map(k => { const v = cur.ref?.[k]; return `<div class="rrow" data-a="rrate" data-k="${k}"><span>${REGIONS[k].ru}</span><b>${v == null ? '—' : refScore(v).toFixed(1)}</b><em>›</em></div>`; }).join('')}</div>`;
-  };
-  render('reflist', `<h1>Оценка по эталонам</h1><div class="mute">Контур области сравнивается с 40 эталонными кадрами</div>
-    <div class="row"><button class="btn ${gender() === 'male' ? '' : 'sec'}" data-a="gender" data-v="male">Мужчина</button><button class="btn ${gender() === 'female' ? '' : 'sec'}" data-a="gender" data-v="female">Женщина</button></div>
-    ${['ANGU', 'DIMO', 'MISC'].map(card).join('')}
-    <div class="row"><button class="btn sec" data-a="rback">К результату</button></div>`);
-}
 
 /* ---------- оценка одной метрики ---------- */
 let rate = null;
@@ -962,11 +1004,11 @@ function renderRefRate(key) {
   const strip = Array.from({ length: FRAMES }, (_, n) => `<figure data-a="rpick" data-i="${n}" id="th${n}"><img loading="lazy" src="${refPath(key, n)}" alt="" onerror="this.remove()"><b>${n}</b></figure>`).join('');
   render('refrate', `<div class="top"><h1>${r.ru}</h1><span class="mute">${i + 1}/${keys.length}</span></div>
     <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}</div>
-    <div class="refpair"><figure><img class="cv" id="rc" alt=""><figcaption>Ваш контур</figcaption></figure>
-      <figure><img class="cv" id="rf" alt=""><figcaption id="rcap"></figcaption></figure></div>
+    <div class="refpair"><figure><img class="cv" id="rc" data-a="zoomsrc" alt=""><figcaption>Ваш контур</figcaption></figure>
+      <figure><img class="cv" id="rf" data-a="zoomsrc" alt=""><figcaption id="rcap"></figcaption></figure></div>
     <div class="card"><input type="range" id="rs" min="0" max="${FRAMES - 1}" value="${rate.idx}" style="width:100%;accent-color:var(--teal)">
       <div class="strip" id="strip">${strip}</div>
-      <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего.</p>
+      <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего. Нажмите на картинку, чтобы увеличить.</p>
       <div class="row"><button class="btn sec" data-a="rsave">Сохранить оценку</button></div>
       <button class="lnk" data-a="rclr">Сбросить оценку</button></div>
     <div class="nav"><button class="btn sec sq" data-a="rprev">‹</button>
@@ -991,7 +1033,7 @@ function refShow(save = true) {
 function rateStep(s) {
   const keys = allKeys(), i = keys.indexOf(rate.key) + s;
   if (i < 0) return;
-  if (i >= keys.length) return renderRefList();
+  if (i >= keys.length) return renderResult(null, REGIONS[rate.key].g);
   renderRefRate(keys[i]); scrollTo(0, 0);
 }
 
@@ -1001,16 +1043,19 @@ function rateStep(s) {
 const openRecord = async id => {
   const r = await Store.get(id); if (!r) return toast('Запись не найдена');
   cur = r; cur.own = cur.own || {}; cur.ref = cur.ref || {}; cur.gender = cur.gender || 'male';
-  if (isComplete(r)) renderResult();
+  if (isComplete(r)) renderResult(null, 'over');
   else { const miss = PTS.findIndex(p => !r.pts[p.k]); cur.i = miss >= 0 ? miss : 0; renderMark(); }
   scrollTo(0, 0);
 };
 const goBack = () => {
-  if (view === 'fix') { fixRestore(); persist(true); return renderResult(fix.i); }
-  if (view === 'refrate') { persist(true); return renderRefList(); }
-  if (view === 'reflist') { persist(true); return renderResult(); }
+  if (view === 'fix') { fixRestore(); persist(true); return renderResult(fix.i, 'harm'); }
+  if (view === 'refrate') { persist(true); return renderResult(null, REGIONS[rate.key].g); }
   if (view === 'guide') return ({ mark: () => cur ? renderMark() : renderHome(), result: () => cur ? renderResult() : renderHome() }[guideFrom] || renderHome)();
   persist(true); renderHome();
+};
+const zoomImg = src => {
+  const ov = Object.assign(document.createElement('div'), { className: 'ov', innerHTML: `<img src="${src}" alt="">` });
+  ov.dataset.a = 'close'; document.body.appendChild(ov);
 };
 
 const ACTIONS = {
@@ -1022,25 +1067,22 @@ const ACTIONS = {
   clear() { delete cur.pts[PTS[cur.i].k]; persist(); renderMark(); },
   edit() { cur.i = 0; renderMark(); scrollTo(0, 0); },
   home: () => { persist(true); renderHome(); scrollTo(0, 0); },
+  tab({ t }) { renderResult(null, t); scrollTo(0, 0); },
   tog: ({ i }) => toggleMetric(+i),
   fix: ({ i }) => { renderFix(+i); scrollTo(0, 0); },
   fxreset() { fixRestore(); fixSeed(); fix.active = null; persist(); fixDraw(); fixInfo(); },
-  fxdone() { persist(true); renderResult(fix.i); },
+  fxdone() { persist(true); renderResult(fix.i, 'harm'); },
   guide() { guideFrom = view; renderGuide(); scrollTo(0, 0); },
   back: goBack,
-  reflist() { renderRefList(); scrollTo(0, 0); },
-  rback() { persist(true); renderResult(); scrollTo(0, 0); },
-  gender({ v }) { cur.gender = v; persist(); renderRefList(); },
+  gender({ v }) { cur.gender = v; persist(); renderResult(null, tab); },
   rrate({ k }) { renderRefRate(k); scrollTo(0, 0); },
   rpick({ i }) { rate.idx = +i; refShow(true); haptic(); },
   rsave() { refShow(true); haptic(); toast('Оценка сохранена'); },
   rclr() { delete cur.ref[rate.key]; persist(); refShow(false); },
   rprev: () => rateStep(-1),
   rnext: () => rateStep(1),
-  zoom({ k }) {
-    const ov = Object.assign(document.createElement('div'), { className: 'ov', innerHTML: `<img src="${IMG_DIR}/${k}.webp" alt="">` });
-    ov.dataset.a = 'close'; document.body.appendChild(ov);
-  },
+  zoom({ k }) { zoomImg(`${IMG_DIR}/${k}.webp`); },
+  zoomsrc(_, el) { if (el.getAttribute('src') && el.style.visibility !== 'hidden') zoomImg(el.src); },
   close: (_, el) => el.remove()
 };
 
