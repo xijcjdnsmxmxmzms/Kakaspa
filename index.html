@@ -114,6 +114,15 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 </style></head><body><div id="app"></div>
 <script>
 'use strict';
+function showFatal(msg) {
+  const a = document.getElementById('app'); if (!a) return;
+  if (a.innerHTML.trim()) { try { toast('Ошибка: ' + String(msg).slice(0, 120)); } catch {} return; }
+  a.innerHTML = '<h1>Что-то пошло не так</h1><div class="card"><p style="margin:0;font-size:13px;word-break:break-word">' + String(msg).replace(/</g, '&lt;') + '</p>' +
+    '<div class="row"><button class="btn" onclick="location.reload()">Перезапустить</button></div>' +
+    '<div class="row"><button class="btn sec" onclick="try{indexedDB.deleteDatabase(\'patrick-analysis\');localStorage.clear();}catch(e){}setTimeout(function(){location.reload()},400)">Очистить историю и перезапустить</button></div></div>';
+}
+window.addEventListener('error', e => showFatal((e.message || 'ошибка') + (e.lineno ? ' (строка ' + e.lineno + ')' : '')));
+window.addEventListener('unhandledrejection', e => showFatal(e.reason?.stack || e.reason || 'ошибка'));
 /* =====================================================================
    1. УТИЛИТЫ И TELEGRAM
    ===================================================================== */
@@ -168,7 +177,7 @@ const Store = (() => {
   return {
     async all() {
       const r = await run('readonly', s => s.getAll()).catch(() => null);
-      return (r || [...mem.values()]).sort((a, b) => b.updated - a.updated);
+      return (r || [...mem.values()]).filter(x => x && x.id).map(x => { x.pts = x.pts || {}; x.thumb = x.thumb || x.img || ''; return x; }).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     },
     async get(id) { return (await run('readonly', s => s.get(id)).catch(() => null)) || mem.get(id) || null; },
     async put(rec) { mem.set(rec.id, rec); await run('readwrite', s => s.put(rec)).catch(() => {}); },
@@ -780,7 +789,7 @@ async function renderHome() {
       <input type="file" id="file" accept="image/*" hidden>
       <div class="row"><button class="btn" data-a="pick">Выбрать фото</button></div></div>
     <h2>История</h2>
-    ${list.length ? list.map(item).join('') : '<div class="card mute">Пока пусто. Загрузите фото — результаты сохранятся здесь.</div>'}`);
+    ${list.length ? list.map(r => { try { return item(r); } catch { return ''; } }).join('') : '<div class="card mute">Пока пусто. Загрузите фото — результаты сохранятся здесь.</div>'}`);
 }
 
 function renderSettings() {
@@ -1253,4 +1262,197 @@ function regionPaths(key) {
   const L = k => rotPt(raw(k), rot);
   const H = Math.abs(L('chinBottom').y - L('hairline').y) || 1;
   const cx = ['hairline', 'innerCupidsBow', 'noseBottom', 'chinBottom'].reduce((t, k) => t + L(k).x, 0) / 4;
-  const el = e => { const [k, ox = 0, oy = 
+  const el = e => { const [k, ox = 0, oy = 0] = Array.isArray(e) ? e : [e], p = L(k); return { x: p.x + (p.x < cx ? -1 : 1) * ox * H, y: p.y + oy * H, k }; };
+  return REGIONS[key].parts.map(part => {
+    let pts, corners = [], lines = [];
+    if (part.lips) {
+      const [a, b] = [L('mouthLeft'), L('mouthRight')].sort((u, v) => u.x - v.x), c = L('cupidsBow'),
+            m = { x: 2 * cx - c.x, y: c.y }, [p1, p2] = [c, m].sort((u, v) => u.x - v.x);
+      pts = [a, p1, L('innerCupidsBow'), p2, b, L('lowerLip')]; corners = [0, 4];
+      lines = [crSeg([a, L('mouthMiddle'), b], false)];
+    } else {
+      pts = part.p.map(el);
+      if (part.sort) { const c = mean(pts); pts.sort((u, v) => Math.atan2(u.y - c.y, u.x - c.x) - Math.atan2(v.y - c.y, v.x - c.x)); }
+      corners = (part.corners || []).map(k => pts.findIndex(q => q.k === k)).filter(i => i >= 0);
+    }
+    return { poly: shapeOf(pts, corners, part.poly), lines };
+  });
+}
+
+const imgCache = {};
+const getImg = async () => imgCache[cur.id] || (imgCache[cur.id] = await new Promise((ok, fail) => {
+  const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = cur.img;
+}));
+const trace = (g, pts, close) => { g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); if (close) g.closePath(); };
+async function regionImage(key, px = 640) {
+  const im = await getImg(), rot = faceFrame();
+  const q = PTS.filter(p => cur.pts[p.k]).map(p => rotPt(cur.pts[p.k], rot));
+  const xs = q.map(a => a.x), ys = q.map(a => a.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const S = Math.max(x1 - x0, y1 - y0) * 1.45, ox = (x0 + x1) / 2 - S / 2, oy = (y0 + y1) / 2 - S / 2, k = px / S;
+  const c = Object.assign(document.createElement('canvas'), { width: px, height: px }), g = c.getContext('2d');
+  g.fillStyle = '#566064'; g.fillRect(0, 0, px, px);
+  g.save(); g.scale(k, k); g.translate(-ox, -oy); g.rotate(rot); g.drawImage(im, 0, 0, cur.w, cur.h); g.restore();
+  return c.toDataURL('image/jpeg', .92);
+}
+
+/* ---------- данные оценки ---------- */
+const gender = () => cur.gender || 'male';
+const allKeys = () => Object.keys(REGIONS).filter(k => !REGIONS[k].only || REGIONS[k].only === gender());
+const fmtS = v => v == null ? '—' : v.toFixed(1);
+function groupScore(g) {
+  const keys = allKeys().filter(k => REGIONS[k].g === g), done = keys.filter(k => cur.ref?.[k] != null);
+  return { n: done.length, total: keys.length, score: done.length ? done.reduce((t, k) => t + refScore(cur.ref[k]), 0) / done.length : null };
+}
+
+/* Если имя папки с эталонами отличается от названия в приложении — укажите его здесь */
+const FOLDER = {
+  chinDef: 'Чёткость Подбородка',
+  dNose: 'Нос (Анфас)',
+  crows: 'Гусинные лапки',
+  darkCircles: 'Темные круги'
+};
+const refPath = (key, i) => encodeURI(`${REF_DIR}/${gender()}/${GROUPS[REGIONS[key].g].dir}/${FOLDER[key] || REGIONS[key].ru}/frame_${String(i).padStart(4, '0')}.webp`);
+
+/* ---------- итоговая формула ----------
+   Итог = 0.40·гармония + 0.15·диморфизм + 0.25·ангулярити + 0.20·misc */
+const W = { harm: .4, dimo: .15, angu: .25, misc: .20 };
+const WNAME = { harm: 'Гармония', dimo: 'Диморфизм', angu: 'Ангулярити', misc: 'Misc' };
+function finalScore() {
+  const parts = {
+    harm: combinedHarmony(),
+    dimo: groupScore('DIMO').score,
+    angu: groupScore('ANGU').score,
+    misc: groupScore('MISC').score
+  };
+  const ready = Object.values(parts).every(v => v != null);
+  const total = ready ? W.harm * parts.harm + W.dimo * parts.dimo + W.angu * parts.angu + W.misc * parts.misc : null;
+  return { parts, ready, total };
+}
+
+/* ---------- оценка одной метрики ---------- */
+let rate = null;
+function renderRefRate(key) {
+  const keys = allKeys(), i = keys.indexOf(key), r = REGIONS[key], saved = cur.ref?.[key];
+  rate = { key, idx: saved ?? Math.round((FRAMES - 1) / 2) };
+  const strip = Array.from({ length: FRAMES }, (_, n) => `<figure data-a="rpick" data-i="${n}" id="th${n}"><img loading="lazy" src="${refPath(key, n)}" alt="" onerror="this.remove()"><b>${n}</b></figure>`).join('');
+  render('refrate', `<div class="top"><h1>${r.ru}</h1><span class="mute">${i + 1}/${keys.length}</span></div>
+    <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}</div>
+    <div class="refpair"><figure><img class="cv" id="rc" data-a="zoomsrc" alt=""><figcaption>Ваше фото</figcaption></figure>
+      <figure><img class="cv" id="rf" data-a="zoomsrc" alt=""><figcaption id="rcap"></figcaption></figure></div>
+    <div class="card curve" id="rcurve"></div>
+    <div class="card"><input type="range" id="rs" min="0" max="${FRAMES - 1}" value="${rate.idx}" style="width:100%;accent-color:var(--teal)">
+      <div class="strip" id="strip">${strip}</div>
+      <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего. Нажмите на картинку, чтобы увеличить.</p>
+      <div class="row"><button class="btn sec" data-a="rsave">Сохранить оценку</button></div>
+      <button class="lnk" data-a="rclr">Сбросить оценку</button></div>
+    <div class="nav"><button class="btn sec sq" data-a="rprev">‹</button>
+      <select id="rsel">${keys.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${cur.ref?.[k] != null ? '✓ ' : ''}${REGIONS[k].ru}</option>`).join('')}</select>
+      <button class="btn sq" data-a="rnext">›</button></div>`, true);
+  refShow(false);
+  regionImage(key).then(u => { if (rate?.key === key && $('#rc')) $('#rc').src = u; }).catch(() => toast('Не удалось построить контур'));
+}
+function refShow(save = true) {
+  const { key, idx } = rate;
+  if (save) { cur.ref = cur.ref || {}; cur.ref[key] = idx; persist(); }
+  const rf = $('#rf'), done = cur.ref?.[key] != null;
+  rf.onerror = () => { rf.style.visibility = 'hidden'; $('#rcap').textContent = `Не найден: ${decodeURI(refPath(key, idx))}`; };
+  rf.onload = () => { rf.style.visibility = ''; };
+  rf.src = refPath(key, idx);
+  $('#rcap').textContent = `Эталон ${idx}` + (done ? ` · ${refScore(idx).toFixed(1)}/10` : ' · оценка не выбрана');
+  $('#rs').value = idx;
+  $('#rcurve').innerHTML = `<h3>Оценка ${refScore(idx).toFixed(1)}/10</h3>` + curveSvg(refScore(idx), true);
+  document.querySelectorAll('#strip figure').forEach((f, n) => f.classList.toggle('on', n === idx));
+  const s = $('#strip'), f = $('#th' + idx); if (s && f) s.scrollLeft = f.offsetLeft - s.clientWidth / 2 + f.offsetWidth / 2;
+  const sel = $('#rsel'), o = sel?.options[sel.selectedIndex]; if (o) o.textContent = `${done ? '✓ ' : ''}${REGIONS[key].ru}`;
+}
+function rateStep(s) {
+  const keys = allKeys(), i = keys.indexOf(rate.key) + s;
+  if (i < 0) return;
+  if (i >= keys.length) return renderResult(null, REGIONS[rate.key].g);
+  renderRefRate(keys[i]); scrollTo(0, 0);
+}
+
+/* =====================================================================
+   10. ДЕЙСТВИЯ И НАВИГАЦИЯ
+   ===================================================================== */
+const openRecord = async id => {
+  const r = await Store.get(id); if (!r) return toast('Запись не найдена');
+  cur = r; kind = 'front'; hsub = 'front'; cur.own = cur.own || {}; cur.ref = cur.ref || {}; cur.ppts = cur.ppts || {};
+  if (isComplete(r)) { cur.gender = cur.gender || 'male'; tab = 'over'; renderResult(null, 'over'); }
+  else if (!cur.gender) renderGender();
+  else { const miss = PTS.findIndex(p => !r.pts[p.k]); cur.i = miss >= 0 ? miss : 0; renderMark(); }
+  scrollTo(0, 0);
+};
+const goBack = () => {
+  if (view === 'fix') { fixRestore(); persist(true); return renderResult(fix.i, 'harm'); }
+  if (view === 'refrate') { persist(true); return renderResult(null, REGIONS[rate.key].g); }
+  if (view === 'settings') return renderHome();
+  if (view === 'guide') return ({ settings: renderSettings, mark: () => cur ? renderMark() : renderHome(), result: () => cur ? renderResult() : renderHome() }[guideFrom] || renderHome)();
+  persist(true); renderHome();
+};
+const zoomImg = src => {
+  const ov = Object.assign(document.createElement('div'), { className: 'ov', innerHTML: `<img src="${src}" alt="">` });
+  ov.dataset.a = 'close'; document.body.appendChild(ov);
+};
+
+const ACTIONS = {
+  pick: () => $('#file').click(),
+  open: ({ id }) => openRecord(id),
+  async del({ id }) { if (await ask('Удалить этот анализ из истории?')) { await Store.del(id); renderHome(); } },
+  prev: () => step(-1),
+  next: () => step(1),
+  clear() { const k = K(); delete k.pts[k.list[cur[k.key]].k]; persist(); renderMark(); },
+  edit() { kind = tab === 'harm' && hsub === 'side' && cur.pimg ? 'side' : 'front'; cur[K().key] = 0; renderMark(); scrollTo(0, 0); },
+  sub({ s }) { hsub = s; renderResult(null, 'harm'); },
+  ppick() { $('#pfile').click(); },
+  pedit() { kind = 'side'; const miss = PPTS.findIndex(p => !cur.ppts?.[p.k]); cur.pi = miss >= 0 ? miss : 0; renderMark(); scrollTo(0, 0); },
+  ptog: ({ i }) => togglePMetric(+i),
+  home: () => { persist(true); renderHome(); scrollTo(0, 0); },
+  tab({ t }) { renderResult(null, t); scrollTo(0, 0); },
+  tog: ({ i }) => toggleMetric(+i),
+  fix: ({ i }) => { renderFix(+i); scrollTo(0, 0); },
+  fxreset() { fixRestore(); fixSeed(); fix.active = null; persist(); fixDraw(); fixInfo(); },
+  fxdone() { persist(true); renderResult(fix.i, 'harm'); },
+  guide() { guideFrom = view; renderGuide(); scrollTo(0, 0); },
+  back: goBack,
+  settings() { renderSettings(); scrollTo(0, 0); },
+  setgender({ v }) { kind = 'front'; cur.gender = v; persist(true); renderMark(); scrollTo(0, 0); },
+  swapgender() { cur.gender = gender() === 'male' ? 'female' : 'male'; persist(true); renderResult(null, tab); },
+  rrate({ k }) { renderRefRate(k); scrollTo(0, 0); },
+  rpick({ i }) { rate.idx = +i; refShow(true); haptic(); },
+  rsave() { refShow(true); haptic(); toast('Оценка сохранена'); },
+  rclr() { delete cur.ref[rate.key]; persist(); refShow(false); },
+  rprev: () => rateStep(-1),
+  rnext: () => rateStep(1),
+  zoom({ k }) { zoomImg(`${IMG_DIR}/${k}.webp`); },
+  zoomsrc(_, el) { if (el.getAttribute('src') && el.style.visibility !== 'hidden') zoomImg(el.src); },
+  close: (_, el) => el.remove()
+};
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (b && ACTIONS[b.dataset.a]) ACTIONS[b.dataset.a](b.dataset, b);
+});
+document.body.addEventListener('click', e => { const o = e.target.closest('.ov'); if (o) o.remove(); });
+app.addEventListener('input', e => { if (e.target.id === 'rs' && rate) { rate.idx = +e.target.value; refShow(true); } });
+app.addEventListener('change', async e => {
+  const t = e.target;
+  if (t.id === 'sel') { cur[K().key] = +t.value; persist(); renderMark(); scrollTo(0, 0); }
+  else if (t.id === 'pfile' && t.files[0]) {
+    try {
+      const im = await loadImage(t.files[0]), b = scaled(im, 1200, .88);
+      Object.assign(cur, { pimg: b.url, pw: b.w, ph: b.h, ppts: {}, pi: 0, pHarmony: null });
+      kind = 'side'; persist(true); renderMark(); scrollTo(0, 0);
+    } catch (err) { toast(err.message || 'Не удалось загрузить фото'); }
+  }
+  else if (t.id === 'rsel') { renderRefRate(t.value); scrollTo(0, 0); }
+  else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' || t.tagName === 'SELECT' ? t.value : t.type === 'range' ? +t.value : t.checked; saveSettings(); }
+  else if (t.id === 'file' && t.files[0]) {
+    try { cur = await createRecord(t.files[0]); await Store.put(cur); tab = 'over'; renderGender(); scrollTo(0, 0); }
+    catch (err) { toast(err.message || 'Не удалось загрузить фото'); }
+  }
+});
+try { tg?.BackButton?.onClick(goBack); } catch {}
+
+/* ---------- старт ---------- */
+(async () => { try { await migrateOldDraft(); } catch {} try { await renderHome(); } catch (e) { showFatal(e?.stack || e); } })();
+</script></body></html>
