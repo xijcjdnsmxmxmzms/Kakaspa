@@ -613,8 +613,6 @@ function tm(name, ds, min, max, bl, bh, u, f, ln, an, o = {}) {
     show: v => v.toFixed(u === '°' ? 1 : 2) + u });
 }
 const A3 = (v, a, b) => R => [tri(R, v, a, b)];
-/* продолжение линии челюсти (верхний угол → menton) до вертикали x = vx; если линия вертикальна — горизонтальный запасной вариант */
-const jawHit = (g, m, vx) => { const dx = m.x - g.x; return Math.abs(dx) < 1e-6 ? { x: vx, y: g.y } : { x: vx, y: g.y + (m.y - g.y) * (vx - g.x) / dx }; };
 
 tm('Gonial Angle', 'Угол в верхнем углу челюсти между линиями к вырезке уха и к низу подбородка', 112, 123, [2, 5, 8, 15], [2, 5, 8, 15], '°',
   () => pang('gonionTop', 'intertragicNotch', 'menton'), 'gonionTop-intertragicNotch,gonionTop-menton', A3('gonionTop', 'intertragicNotch', 'menton'));
@@ -622,16 +620,14 @@ tm('Nasofrontal Angle', 'Угол в корне носа между линиям
   () => pang('nasion', 'glabella', 'supratip'), 'nasion-glabella,nasion-supratip', A3('nasion', 'glabella', 'supratip'));
 tm('Mandible Plane Angle', 'Угол в нижнем углу челюсти между линиями к подгубной складке и к низу подбородка', 15, 22, [1, 3, 5], [6, 8, 13], '°',
   () => pang('gonionBottom', 'sublabiale', 'menton'), 'gonionBottom-sublabiale,gonionBottom-menton', A3('gonionBottom', 'sublabiale', 'menton'));
-tm('Ramus to Mandible', 'Длина ветви (вырезка уха — верхний угол челюсти) к расстоянию по горизонтали от верхнего угла челюсти до франкфуртской вертикали через корень носа', .59, .77, [.03, .05, .10, .15], [.03, .05, .10, .15], 'x',
-  () => { const g = Qk('gonionTop'), m = Qk('menton'), n = Qk('nasion'), t = jawHit(g, m, n.x); return pdist('intertragicNotch', 'gonionTop') / (Math.hypot(t.x - g.x, t.y - g.y) || 1); },
-  'intertragicNotch-gonionTop', null,
-  { keys: ['gonionTop', 'menton', 'nasion'], ex: R => { const g = R('gonionTop'), m = R('menton'), n = R('nasion'); return { sg: [[g, jawHit(g, m, n.x)]], full: [vline(n.x)] }; } });
+tm('Ramus to Mandible', 'Длина ветви (вырезка уха — верхний угол челюсти) к длине тела челюсти (верхний угол челюсти — menton)', .59, .77, [.03, .05, .10, .15], [.03, .05, .10, .15], 'x',
+  () => pdist('intertragicNotch', 'gonionTop') / (pdist('gonionTop', 'menton') || 1), 'intertragicNotch-gonionTop,gonionTop-menton');
 tm('Facial Convexity Glabella', 'Угол в субназале между линиями к глабелле и к подбородку', 168, 176, [3, 5, 8], [3, 5, 8], '°',
   () => pang('subnasale', 'glabella', 'pogonion'), 'subnasale-glabella,subnasale-pogonion', A3('subnasale', 'glabella', 'pogonion'));
 tm('Submental Cervical Angle', 'Угол в шейной точке между линиями к точке шеи и к низу подбородка', 90, 105, [5, 15, 20], [5, 15, 20], '°',
   () => pang('cervicalPoint', 'neckPoint', 'menton'), 'cervicalPoint-neckPoint,cervicalPoint-menton', A3('cervicalPoint', 'neckPoint', 'menton'));
-tm('Nasofacial Angle', 'Угол в корне носа между линиями к подбородку и к супратипу', 30, 36, [1, 2, 4, 7], [4, 6, 10, 11], '°',
-  () => pang('nasion', 'pogonion', 'supratip'), 'nasion-pogonion,nasion-supratip', A3('nasion', 'pogonion', 'supratip'));
+tm('Nasofacial Angle', 'Угол в корне носа между линиями к подбородку и к кончику носа', 30, 36, [1, 2, 4, 7], [4, 6, 10, 11], '°',
+  () => pang('nasion', 'pogonion', 'pronasale'), 'nasion-pogonion,nasion-pronasale', A3('nasion', 'pogonion', 'pronasale'));
 tm('Nasolabial Angle', 'Угол в субназале между линиями к верхней губе и к инфратипу', 94, 118, [4, 7, 13, 15, 18], [4, 7, 13, 15, 18], '°',
   () => pang('subnasale', 'labraleSuperius', 'infratip'), 'subnasale-labraleSuperius,subnasale-infratip', A3('subnasale', 'labraleSuperius', 'infratip'));
 PM.push({ name: 'Orbital Vector', ds: 'Насколько орбитале впереди (+) или позади (−) вертикали через вершину роговицы, в % от высоты лица', min: 2.5, max: 8, u: '%', dom: [-5, 5],
@@ -686,6 +682,28 @@ tm('Browridge Inclination Angle', 'Наклон линии глабелла — 
   { ex: R => ({ full: [vline(R('glabella').x)] }) });
 tm('Nasal Tip Angle', 'Угол в кончике носа между линиями к супратипу и к инфратипу', 112, 125, [3, 7, 12, 15], [3, 7, 12, 15], '°',
   () => pang('pronasale', 'supratip', 'infratip'), 'pronasale-supratip,pronasale-infratip', A3('pronasale', 'supratip', 'infratip'));
+
+/* ---- новые профильные метрики ---- */
+const fhY = R => (R('porion').y + R('orbitale').y) / 2;             // уровень франкфуртской горизонтали (после поворота)
+const zHit = (pg, st, y) => { const dy = st.y - pg.y; return Math.abs(dy) < 1e-6 ? null : { x: pg.x + (st.x - pg.x) * (y - pg.y) / dy, y }; };
+tm('Upper Forehead Slope', 'Угол в глабелле между линиями к линии роста волос и ко лбу (+ = лоб впереди линии глабелла — волосы, верх лба скошен назад)', 0, 2, [2, 4, 6], [5, 8.5, 12], '°',
+  () => { const g = Qk('glabella'), a = sub(Qk('trichion'), g), b = sub(Qk('forehead'), g); return deg(Math.atan2(PC.f * (a.x * b.y - a.y * b.x), a.x * b.x + a.y * b.y)); },
+  'glabella-trichion,glabella-forehead', A3('glabella', 'trichion', 'forehead'), { dom: [-4, 14] });
+tm('Facial Depth to Height Ratio', 'Глубина лица (трагион — субназале) к высоте (корень носа — подгубная складка)', 1.30, 1.44, [.1, .2, .3], [.1, .2, .3], 'x',
+  () => pdist('tragus', 'subnasale') / (pdist('nasion', 'sublabiale') || 1), 'nasion-sublabiale,tragus-subnasale');
+tm('Interior Midface Projection Angle', 'Угол в субаларе между линией к латеральному краю века и горизонталью, идущей до вертикали от края века', 53, 60, [4, 8, 14, 20], [4, 8, 14, 20], '°',
+  () => { const s0 = Qk('subalare'), e = Qk('eyelidEnd'); return deg(Math.atan2(Math.abs(e.y - s0.y), Math.abs(e.x - s0.x))); },
+  'subalare-eyelidEnd', R => { const s0 = R('subalare'), e = R('eyelidEnd'), X = { x: e.x, y: s0.y }; return [{ v: s0, a: e, b: X, dash: [[s0, X], [e, X]] }]; });
+tm('Anterior Facial Depth', 'Угол в субаларе между линиями к трагиону и к нижнему веку', 64.5, 67.5, [8, 16, 24, 32], [8, 16, 24, 32], '°',
+  () => pang('subalare', 'tragus', 'lowerEyelid'), 'subalare-tragus,subalare-lowerEyelid', A3('subalare', 'tragus', 'lowerEyelid'));
+tm('Frankfort-tip Angle', 'Угол в субназале между горизонталью (параллель франкфуртской плоскости) и линией к инфратипу', 32, 38, [8, 12, 18], [8, 12, 18], '°',
+  () => { const s0 = Qk('subnasale'), w = sub(Qk('infratip'), s0); return angV({ x: PC.f, y: 0 }, w); },
+  'subnasale-infratip', R => { const s0 = R('subnasale'), a = R('infratip'), L = Math.hypot(a.x - s0.x, a.y - s0.y), B = { x: s0.x + PC.f * L, y: s0.y }; return [{ v: s0, a, b: B, dash: [[s0, B]] }]; },
+  { dom: [20, 50] });
+tm('Z Angle', 'Угол между франкфуртской плоскостью и линией подбородок — супратип, продолженной до плоскости', 78, 82, [5, 10, 15, 22], [5, 10, 15, 22], '°',
+  () => { const pg = Qk('pogonion'), st = Qk('supratip'), fy = (Qk('porion').y + Qk('orbitale').y) / 2, P0 = zHit(pg, st, fy); return P0 ? angV({ x: -PC.f, y: 0 }, sub(pg, P0)) : NaN; },
+  '', R => { const pg = R('pogonion'), st = R('supratip'), P0 = zHit(pg, st, fhY(R)); if (!P0) return []; const L = Math.hypot(pg.x - P0.x, pg.y - P0.y) * .8; return [{ v: P0, a: pg, b: { x: P0.x - PC.f * L, y: P0.y }, dash: [[P0, { x: P0.x - PC.f * L, y: P0.y }]] }]; },
+  { keys: ['pogonion', 'supratip', 'porion', 'orbitale'], ex: R => { const pg = R('pogonion'), st = R('supratip'), P0 = zHit(pg, st, fhY(R)); return { full: [hline(fhY(R))], sg: P0 ? [[pg, P0]] : [] }; } });
 
 function analyzeProfile(pts) {
   PC = profCtx(pts);
@@ -960,10 +978,11 @@ function overView() {
 
 const PCATS = [
   ['Челюсть и шея', ['Gonial Angle', 'Mandible Plane Angle', 'Ramus to Mandible', 'Submental Cervical Angle', 'Gonion to Mouth']],
-  ['Нос', ['Nasofrontal Angle', 'Nasofacial Angle', 'Nasolabial Angle', 'Nasal Projection', 'Nasal Width to Height Projection', 'Nasal Tip Angle', 'Nasomental Angle']],
-  ['Выпуклость и подбородок', ['Facial Convexity Glabella', 'Total Facial Convexity', 'Facial Convexity Nasion', 'Recession Relative to Frankfort Plane']],
+  ['Нос', ['Nasofrontal Angle', 'Nasofacial Angle', 'Nasolabial Angle', 'Nasal Projection', 'Nasal Width to Height Projection', 'Nasal Tip Angle', 'Nasomental Angle', 'Frankfort-tip Angle']],
+  ['Выпуклость и подбородок', ['Facial Convexity Glabella', 'Total Facial Convexity', 'Facial Convexity Nasion', 'Recession Relative to Frankfort Plane', 'Z Angle']],
+  ['Глубина и середина лица', ['Facial Depth to Height Ratio', 'Interior Midface Projection Angle', 'Anterior Facial Depth']],
   ['Губы', ['Mentolabial Angle', "Rickett's E-Line", 'Holdaway H-Line', 'Steiner S-Line', 'Burstone Line']],
-  ['Лоб и орбиты', ['Browridge Inclination Angle', 'Orbital Vector']]
+  ['Лоб и орбиты', ['Browridge Inclination Angle', 'Upper Forehead Slope', 'Orbital Vector']]
 ];
 function pillsHtml(R, cats, pillFn) {
   const order = {
