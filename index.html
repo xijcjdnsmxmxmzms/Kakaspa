@@ -103,6 +103,7 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 .mch span{font-weight:500;font-size:12px;letter-spacing:0;color:var(--mute)}
 .mch i{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-2px;margin-right:4px;box-sizing:border-box}
 .mch .d1{background:#cfe3d6;border:2px solid #8fbf9f}.mch .d2{background:#fff;border:3px solid #6a7479;margin-left:4px}
+.mc svg{width:100%;display:block}
 .det .mc svg{background:none;border-radius:0;margin:6px 0 0}
 .seg{display:flex;gap:8px;margin-top:12px}
 .seg button{flex:1;border:0;border-radius:16px;padding:12px 14px;background:#fff;color:var(--mute);font:700 14px Manrope,sans-serif;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 6px #0a2a3512;cursor:pointer}
@@ -401,16 +402,7 @@ metric('Bigonial Width', 'Ширина по верхним углам челюс
 metric('Neck Width', 'Ширина шеи к ширине по верхним углам челюсти', 90, 98, '%', 1, () => d('neckLeft', 'neckRight') / tgw() * 100, 'neckLeft-neckRight,leftTopGonion-rightTopGonion');
 metric('Canthal Tilt', 'Наклон глаз: угол линии «внутренний — внешний угол» к горизонтали', 5, 9, '°', 2, ctilt, '$EyeMedialCanthus-$EyeLateralCanthus', canthalGeom);
 metric('ESR', 'Расстояние между зрачками к ширине скул', 44.3, 47.3, '%', 2, () => ipd() / zy() * 100, 'leftEyePupil-rightEyePupil,' + ZY);
-/* One Eye Apart: ширины глаз рисуются ниже уровня глаз, чтобы линии не сливались в одну длинную; видны оба глаза */
-metric('One Eye Apart Test', 'Расстояние между внутренними углами глаз к ширине глаза (среднее по двум глазам)', .93, 1.04, 'x', 1,
-  () => { const w = s => Math.abs(P(s + 'EyeLateralCanthus').x - P(s + 'EyeMedialCanthus').x); return icd() / ((w('left') + w('right')) / 2); },
-  'leftEyeMedialCanthus-rightEyeMedialCanthus,leftEyeMedialCanthus-leftEyeLateralCanthus,rightEyeMedialCanthus-rightEyeLateralCanthus', null, false,
-  R => {
-    const lm = R('leftEyeMedialCanthus'), ll = R('leftEyeLateralCanthus'), rm = R('rightEyeMedialCanthus'), rl = R('rightEyeLateralCanthus');
-    const y = (lm.y + rm.y) / 2, yo = Math.max(lm.y, rm.y, ll.y, rl.y) + Math.abs(rm.x - lm.x) * .22;
-    return { sg: [[{ x: lm.x, y }, { x: rm.x, y }], [{ x: lm.x, y: yo }, { x: ll.x, y: yo }], [{ x: rm.x, y: yo }, { x: rl.x, y: yo }]],
-             dash: [lm, ll, rm, rl].map(p => [p, { x: p.x, y: yo }]) };
-  });
+metric('One Eye Apart Test', 'Расстояние между внутренними углами глаз к ширине глаза', .93, 1.04, 'x', 1, () => icd() / avg(ew), 'leftEyeMedialCanthus-rightEyeMedialCanthus,leftEyeMedialCanthus-leftEyeLateralCanthus,rightEyeMedialCanthus-rightEyeLateralCanthus');
 metric('Inner Canthal Distance', 'Расстояние между внутренними углами глаз к ширине скул', 25.5, 28, '%', 1, () => icd() / zy() * 100, 'leftEyeMedialCanthus-rightEyeMedialCanthus,' + ZY);
 metric('Outer Canthal Distance', 'Расстояние между внешними углами глаз к ширине скул', .63, .67, 'x', 1, () => d('leftEyeLateralCanthus', 'rightEyeLateralCanthus') / zy(), 'leftEyeLateralCanthus-rightEyeLateralCanthus,' + ZY);
 metric('Medial Canthal Angle', 'Угол между линией «внутренний угол — складка века» и горизонталью', 20, 42, '°', 1,
@@ -441,7 +433,7 @@ metric('Jaw Gonial Slope', 'Угол в верхнем углу челюсти �
 metric('Lower Third Proportions', 'Доля верхней губы (низ носа — центр рта) в нижней трети', 31, 33.5, '%', 1, () => d('noseBottom', 'mouthMiddle') / d('noseBottom', 'chinBottom') * 100, 'noseBottom-mouthMiddle,mouthMiddle-chinBottom');
 metric('JWHR', 'Ширина челюсти к высоте «низ носа — подбородок»', 1.85, 1.95, 'x', 1, () => tgw() / d('noseBottom', 'chinBottom'), 'leftTopGonion-rightTopGonion,noseBottom-chinBottom');
 metric('Alar to Bridge', 'Ширина носа к ширине переносицы', 2, 2.1, 'x', 1, () => nw() / d('leftNoseBridge', 'rightNoseBridge'), 'noseLeft-noseRight,leftNoseBridge-rightNoseBridge');
-metric('Forehead W/H', 'Высота лба (от уровня начала бровей до линии волос) к ширине между висками', 44, 50, '%', 1, () => d('hairline', 'BH') / d('leftTemple', 'rightTemple') * 100, 'leftTemple-rightTemple,hairline-BH,leftBrowHead-rightBrowHead');
+metric('Forehead W/H', 'Высота лба (от уровня начала бровей до линии волос) к ширине между висками', 44, 50, '%', 1, () => d('hairline', 'BH') / d('leftTemple', 'rightTemple') * 100, 'leftTemple-rightTemple,hairline-BH');
 metric('Eyebrow Setness', 'Вертикаль от бровей до лука Купидона к вертикали от зрачков', 88, 98, '%', 1, () => dy('PM', 'cupidsBow') / dy('BM', 'cupidsBow') * 100, 'PM-cupidsBow,BM-cupidsBow,leftEyePupil-rightEyePupil,leftBrowInnerCorner-rightBrowInnerCorner');
 metric('Brow Length / Face Width', 'Суммарная длина бровей к ширине скул', 69, 79, '%', 1, () => (d('leftBrowInnerCorner', 'leftBrowTail') + d('rightBrowInnerCorner', 'rightBrowTail')) / zy() * 100, '$BrowInnerCorner-$BrowTail,' + ZY);
 metric('Deviation Canthal / Brow Tilt', 'Разница между наклоном глаз и наклоном бровей', 0, 3, '°', 1, () => Math.abs(ctilt() - btilt()), '$EyeMedialCanthus-$EyeLateralCanthus,$BrowInnerCorner-$BrowArch',
@@ -499,7 +491,14 @@ function pctAt(x) {                                  // линейная инт�
   return 0;
 }
 const topOf = s => s >= 5 ? pctAt(s) : 100 - pctAt(10 - s);
-const fmtTop = t => t >= 10 ? t.toFixed(1) : t >= 0.1 ? t.toFixed(2) : t.toPrecision(2);
+const fmtTop = t => {
+  if (!(t > 0)) return '0';
+  if (t >= 10) return t.toFixed(1).replace('.', ',');
+  if (t >= 0.1) return t.toFixed(2).replace('.', ',');
+  const dg = Math.min(20, Math.max(2, 1 - Math.floor(Math.log10(t))));      // два значащих разряда, без экспоненты
+  let r = t.toFixed(dg).replace(/0+$/, '').replace(/\.$/, '');
+  return r.replace('.', ',');
+};
 function metricCurveCard(m) {
   const L = 34, Rr = 332, T = 14, B = 130;
   const pad = Math.max(.22 * Math.abs(m.min), .22 * Math.abs(m.max), 1e-6);
@@ -530,11 +529,11 @@ function curveSvg(s, mini = false) {
   (mini ? [0, 5, 10] : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).forEach(i => g += `<text x="${X(i)}" y="${bot + (mini ? 13 : 18)}" font-size="${mini ? 9 : 10}" fill="#7b8d93" text-anchor="middle">${i}</text>`);
   let mk = '';
   if (s != null) {
-    const x = X(clamp(s, 0, 10)), t = topOf(s), w = mini ? 112 : 138, lx = clamp(x, 30 + w / 2, 330 - w / 2);
+    const t = topOf(s), txt = `${s.toFixed(mini ? 1 : 2)} · Top ${fmtTop(t)}%`, x = X(clamp(s, 0, 10)), w = Math.max(mini ? 112 : 138, txt.length * (mini ? 5.8 : 6.4) + 22), lx = clamp(x, 30 + w / 2, 330 - w / 2);
     const y0 = mini ? 2 : 4, h = mini ? 18 : 24;
     mk = `<line x1="${x}" x2="${x}" y1="${y0 + h}" y2="${bot}" stroke="#b8a25a" stroke-width="2"/>
       <rect x="${lx - w / 2}" y="${y0}" width="${w}" height="${h}" rx="${h / 2}" fill="#fff" stroke="#e3d9a8" stroke-width="1.5"/>
-      <text x="${lx}" y="${y0 + h / 2 + 4}" font-size="${mini ? 10 : 11}" font-weight="700" fill="#9a8540" text-anchor="middle" font-family="Manrope,system-ui,sans-serif">${s.toFixed(mini ? 1 : 2)} · Top ${fmtTop(t)}%</text>`;
+      <text x="${lx}" y="${y0 + h / 2 + 4}" font-size="${mini ? 10 : 11}" font-weight="700" fill="#9a8540" text-anchor="middle" font-family="Manrope,system-ui,sans-serif">${txt}</text>`;
   }
   return `<svg viewBox="0 0 340 ${vh}">${g}<path d="${dd}L330 ${bot}L30 ${bot}Z" fill="#9aa5aa" fill-opacity=".1"/><path d="${dd}" fill="none" stroke="#9aa5aa" stroke-width="2.2"/>${mk}</svg>`;
 }
@@ -744,15 +743,15 @@ function pMeasureSvg(m) {
   const rot = profRot(cur.ppts), g = pGeom(m, rot), vb = fullVB(cur.ppts, rot);
   return svgBase(vb, rot, '', { img: cur.pimg, w: cur.pw, h: cur.ph }) + geomSvg(g, vb.w, !m.clean) + '</svg>';
 }
-function togglePMetric(i) {
-  const el = $('#pp' + i), m = PRES[i], dt = el.querySelector('.det');
-  el.classList.toggle('open');
-  if (dt.innerHTML) return;
-  const keys = [...new Set([...(m.ln ? segs(m.ln).flat() : []), ...(m.keys || [])])].map(k => PPTS.find(p => p.k === k)).filter(Boolean);
-  dt.innerHTML = pMeasureSvg(m) + (m.dom ? metricCurveCard(m) : '') + `<p>${m.ds}</p>
-    <div class="gl">${keys.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
-    <p><b>Значение:</b> ${m.txt ?? m.show(m.v)}</p>${m.min != null && m.max != null ? `<p><b>Идеал (Tier 1):</b> ${m.max >= 1e8 ? 'от ' + m.min : m.min + '–' + m.max}${m.u === 'мм' ? '' : m.u}</p>` : ''}
-    <p><b>Tier ${m.tier} · оценка ${m.score.toFixed(1)}/10</b></p>`;
+function renderProfileDetail(i) {
+  const m = PRES[i], keys = [...new Set([...(m.ln ? segs(m.ln).flat() : []), ...(m.keys || [])])].map(k => PPTS.find(p => p.k === k)).filter(Boolean);
+  render('pdetail', `<div class="top"><h1>${m.name}</h1>${scoreHtml(m.score)}</div>
+    <div class="mute">Tier ${m.tier}</div>
+    <div class="card det" style="display:block">${pMeasureSvg(m)}${m.dom ? metricCurveCard(m) : ''}<p>${m.ds}</p>
+      <div class="gl">${keys.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
+      <p><b>Значение:</b> ${m.txt ?? m.show(m.v)}</p>${m.min != null && m.max != null ? `<p><b>Идеал (Tier 1):</b> ${m.max >= 1e8 ? 'от ' + m.min : m.min + '–' + m.max}${m.u === 'мм' ? '' : m.u}</p>` : ''}
+      <p><b>Tier ${m.tier} · оценка ${m.score.toFixed(1)}/10</b></p></div>
+    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
 }
 
 /* =====================================================================
@@ -798,7 +797,7 @@ async function migrateOldDraft() {              // перенос чернови
    8. ЭКРАНЫ
    ===================================================================== */
 const app = $('#app');
-let view = 'home', guideFrom = 'home', RES = [], fix = null, tab = 'over';
+let view = 'home', guideFrom = 'home', RES = [], fix = null, tab = 'over', listY = 0;
 const dgm = (k, cls = '') => `<img class="${cls}" src="${IMG_DIR}/${k}.webp" loading="lazy" alt="" onerror="this.closest('.dgw,.gl figure')?.remove?.();this.remove()">`;
 const render = (v, html, nav = false) => {
   view = v; app.innerHTML = html; app.classList.toggle('has-nav', nav);
@@ -1028,10 +1027,10 @@ const strengthsHtml = R => {
 };
 const fPill = (m, i) => {
   const pos = clamp((.5 + (m.v - (m.min + m.max) / 2) / (m.max - m.min) * .4) * 100, 3, 97);
-  return `<div class="pill" id="p${i}"><div class="ph" data-a="tog" data-i="${i}"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div>
-    <div class="zone"><i style="left:${pos}%"></i></div><div class="det"></div></div>`;
+  return `<div class="pill" data-a="mopen" data-i="${i}" style="cursor:pointer"><div class="ph"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div>
+    <div class="zone"><i style="left:${pos}%"></i></div></div>`;
 };
-const pPill = (m, i) => `<div class="pill" id="pp${i}"><div class="ph" data-a="ptog" data-i="${i}"><span>${m.name}<b class="badge">${m.txt ?? m.show(m.v)}</b><small class="full">Tier ${m.tier}</small></span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div><div class="det"></div></div>`;
+const pPill = (m, i) => `<div class="pill" data-a="popen" data-i="${i}" style="cursor:pointer"><div class="ph"><span>${m.name}<b class="badge">${m.txt ?? m.show(m.v)}</b><small class="full">Tier ${m.tier}</small></span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div></div>`;
 
 function sideView() {
   const file = '<input type="file" id="pfile" accept="image/*" hidden>';
@@ -1056,11 +1055,40 @@ function harmView(A) {
     (hsub === 'side' ? sideView() : pillsHtml(A.R, CATS, fPill) + strengthsHtml(A.R));
 }
 
-/* Ангулярити / Диморфизм / Misc: те же пилюли, что и в гармонии. Внутри — контур и выбранный эталон, правка только по кнопке «Править» */
+/* Ангулярити / Диморфизм / Misc: пилюли-входы; внутри — страница метрики с контуром, эталоном и кривой оценки */
 const gPill = k => {
   const v = cur.ref?.[k];
-  return `<div class="pill" id="gp-${k}"><div class="ph" data-a="gtog" data-k="${k}"><span>${REGIONS[k].ru}</span>${v == null ? '<b class="sc">—</b>' : `<b class="sc">${refScore(v).toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b>`}<em>›</em></div><div class="det"></div></div>`;
+  return `<div class="pill" data-a="gopen" data-k="${k}" style="cursor:pointer"><div class="ph"><span>${REGIONS[k].ru}</span>${v == null ? '<b class="sc">—</b>' : `<b class="sc">${refScore(v).toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b>`}<em>›</em></div></div>`;
 };
+/* кривая оценки по эталонам — в том же виде, что и в гармонии */
+function refCurveCard(idx) {
+  const L = 34, Rr = 332, T = 14, B = 130, N = FRAMES - 1;
+  const X = f => L + (Rr - L) * f / N, Y = sc => B - (B - T) * sc / 10;
+  let g = '';
+  [0, 2, 4, 6, 8, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
+  const f0 = Math.ceil(.9 * N), mx = X(idx), my = Y(refScore(idx));
+  const svg = `<svg viewBox="0 0 340 158"><defs><linearGradient id="rgrad" gradientUnits="userSpaceOnUse" x1="0" y1="${B}" x2="0" y2="${T}">
+      <stop offset="0" stop-color="#9a4b3f"/><stop offset=".4" stop-color="#b58a3a"/><stop offset=".7" stop-color="#4f8c68"/><stop offset="1" stop-color="#1f6b7a"/></linearGradient></defs>
+    ${g}<rect x="${X(f0)}" y="${T}" width="${X(N) - X(f0)}" height="${B - T}" fill="#9db4bd" fill-opacity=".28"/>
+    <path d="M${X(0)} ${Y(0)}L${X(N)} ${Y(10)}" fill="none" stroke="url(#rgrad)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${mx}" x2="${mx}" y1="${my}" y2="${B}" stroke="#8a9499" stroke-width="3" stroke-dasharray="4 4"/>
+    <circle cx="${mx}" cy="${my}" r="8" fill="#fff" stroke="#1f6b7a" stroke-width="4"/>
+    <text x="${L}" y="152" font-size="12" fill="#aab8bd">0</text><text x="${(L + Rr) / 2}" y="152" font-size="12" fill="#aab8bd" text-anchor="middle">${Math.round(N / 2)}</text><text x="${Rr}" y="152" font-size="12" fill="#aab8bd" text-anchor="end">${N}</text></svg>`;
+  return `<div class="mc"><div class="mch"><b>КРИВАЯ ОЦЕНКИ</b><span><i class="d1"></i>Идеал · <i class="d2"></i>Вы</span></div>${svg}</div>`;
+}
+function renderGroupDetail(k) {
+  const r = REGIONS[k], v = cur.ref?.[k];
+  render('gdetail', `<div class="top"><h1>${r.ru}</h1>${v == null ? '<b class="sc">—</b>' : scoreHtml(refScore(v))}</div>
+    <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}</div>
+    ${v == null ? `<div class="card"><p class="mute" style="margin:0">Оценка ещё не выставлена.</p><div class="row"><button class="btn" data-a="rrate" data-k="${k}">Оценить</button></div></div>`
+    : `<div class="card"><div class="refpair" style="margin-top:0"><figure><img class="cv" id="gc" data-a="zoomsrc" alt=""><figcaption>Ваше фото</figcaption></figure>
+      <figure><img class="cv" data-a="zoomsrc" src="${refPath(k, v)}" alt="" onerror="this.style.visibility='hidden'"><figcaption>Эталон</figcaption></figure></div>
+      <p style="margin-top:10px"><b>Ваш показатель:</b> ${refScore(v).toFixed(1)}/10</p></div>
+      ${refCurveCard(v)}
+      <div class="row"><button class="btn" data-a="rrate" data-k="${k}">Править</button></div>`}
+    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
+  if (v != null) regionImage(k).then(u => { const im = $('#gc'); if (view === 'gdetail' && im) im.src = u; }).catch(() => toast('Не удалось построить контур'));
+}
 function groupView(g) {
   const s = groupScore(g), top = s.score != null ? topOf(s.score) : null;
   const keys = allKeys().filter(k => REGIONS[k].g === g), sc = k => cur.ref?.[k] == null ? null : refScore(cur.ref[k]);
@@ -1091,7 +1119,6 @@ function renderResult(openI = null, t = tab) {
     <div class="mute">${fmtDate(cur.updated)} · сохранено в истории</div>${tabs}${body}
     <div class="row"><button class="btn sec" data-a="home">История</button></div>`);
   $('.tabs .on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  if (openI !== null && tab === 'harm' && hsub === 'front') { toggleMetric(openI); $('#p' + openI)?.scrollIntoView({ block: 'center' }); }
 }
 
 /* линии замера: «a-b,c-d», «$» → левая и правая сторона */
@@ -1161,16 +1188,18 @@ function measureSvg(m) {
   const rot = faceFrame(), g = frameGeom(m, rot), vb = fullVB(cur.pts, rot);
   return svgBase(vb, rot) + geomSvg(g, vb.w) + '</svg>';
 }
-function toggleMetric(i) {
-  const el = $('#p' + i), m = RES[i], dt = el.querySelector('.det');
-  el.classList.toggle('open');
-  if (dt.innerHTML) return;
-  const used = [...new Set(segs(m.ln).flat())].map(k => PTS.find(p => p.k === k)).filter(Boolean);
-  dt.innerHTML = measureSvg(m) + metricCurveCard(m) + `<p>${m.ds}</p>
-    <div class="gl">${used.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
-    <p><b>Значение:</b> ${fmtVal(m.v, m.u)} · <b>Норма:</b> ${m.min}–${m.max}${m.u}</p>
-    <p><b>Оценка:</b> ${m.score.toFixed(1)}/10</p>
-    <button class="btn sec" data-a="fix" data-i="${i}" style="margin-top:8px">Править точки замера</button>`;
+function refreshRes() { const A = analyze(cur.pts, Settings.level, cur.own); RES = A.R; cur.harmony = A.harmony; }
+function renderMetricDetail(i) {
+  refreshRes();
+  const m = RES[i], used = [...new Set(segs(m.ln).flat())].map(k => PTS.find(p => p.k === k)).filter(Boolean);
+  render('mdetail', `<div class="top"><h1>${m.name}</h1>${scoreHtml(m.score)}</div>
+    ${FULL[m.name] ? `<div class="mute">${FULL[m.name]}</div>` : ''}
+    <div class="card det" style="display:block">${measureSvg(m)}${metricCurveCard(m)}<p>${m.ds}</p>
+      <div class="gl">${used.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
+      <p><b>Значение:</b> ${fmtVal(m.v, m.u)} · <b>Норма:</b> ${m.min}–${m.max}${m.u}</p>
+      <p><b>Оценка:</b> ${m.score.toFixed(1)}/10</p>
+      <div class="row"><button class="btn sec" data-a="fix" data-i="${i}">Править точки замера</button></div></div>
+    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
 }
 
 /* ---------- правка точек прямо по схеме замера ---------- */
@@ -1432,7 +1461,7 @@ function renderRefRate(key) {
     <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}${cur.refPhase ? ' · последний шаг: оценка по эталонам' : ''}</div>
     <div class="refpair"><figure><img class="cv" id="rc" data-a="zoomsrc" alt=""><figcaption>Ваше фото</figcaption></figure>
       <figure><img class="cv" id="rf" data-a="zoomsrc" alt=""><figcaption id="rcap"></figcaption></figure></div>
-    <div class="card curve" id="rcurve"></div>
+    <div id="rcurve"></div>
     <div class="card"><input type="range" id="rs" min="0" max="${FRAMES - 1}" value="${rate.idx}" style="width:100%;accent-color:var(--teal)">
       <div class="strip" id="strip">${strip}</div>
       <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего. Нажмите на картинку, чтобы увеличить.</p>
@@ -1452,9 +1481,9 @@ function refShow(save = true) {
   rf.onerror = () => { rf.style.visibility = 'hidden'; $('#rcap').textContent = `Не найден: ${decodeURI(refPath(key, idx))}`; };
   rf.onload = () => { rf.style.visibility = ''; };
   rf.src = refPath(key, idx);
-  $('#rcap').textContent = `Эталон ${idx}` + (done ? ` · ${refScore(idx).toFixed(1)}/10` : ' · оценка не выбрана');
+  $('#rcap').textContent = 'Эталон';
   $('#rs').value = idx;
-  $('#rcurve').innerHTML = `<h3>Оценка ${refScore(idx).toFixed(1)}/10</h3>` + curveSvg(refScore(idx), true);
+  $('#rcurve').innerHTML = `<p style="margin:12px 0 0"><b>${done ? 'Ваш показатель: ' + refScore(idx).toFixed(1) + '/10' : 'Оценка не выбрана'}</b></p>` + refCurveCard(idx);
   document.querySelectorAll('#strip figure').forEach((f, n) => f.classList.toggle('on', n === idx));
   const s = $('#strip'), f = $('#th' + idx); if (s && f) s.scrollLeft = f.offsetLeft - s.clientWidth / 2 + f.offsetWidth / 2;
   const sel = $('#rsel'), o = sel?.options[sel.selectedIndex]; if (o) o.textContent = `${done ? '✓ ' : ''}${REGIONS[key].ru}`;
@@ -1483,8 +1512,9 @@ const openRecord = async id => {
   scrollTo(0, 0);
 };
 const goBack = () => {
-  if (view === 'fix') { fixRestore(); persist(true); return renderResult(fix.i, 'harm'); }
-  if (view === 'refrate') { persist(true); return cur.refPhase ? renderHome() : renderResult(null, REGIONS[rate.key].g); }
+  if (view === 'fix') { fixRestore(); persist(true); return renderMetricDetail(fix.i); }
+  if (view === 'mdetail' || view === 'pdetail' || view === 'gdetail') { renderResult(null, tab); return scrollTo(0, listY); }
+  if (view === 'refrate') { persist(true); return cur.refPhase ? renderHome() : renderGroupDetail(rate.key); }
   if (view === 'settings') return renderHome();
   if (view === 'guide') return ({ settings: renderSettings, mark: () => cur ? renderMark() : renderHome(), result: () => cur ? renderResult() : renderHome() }[guideFrom] || renderHome)();
   persist(true); renderHome();
@@ -1505,13 +1535,14 @@ const ACTIONS = {
   sub({ s }) { hsub = s; renderResult(null, 'harm'); },
   ppick() { $('#pfile').click(); },
   pedit() { kind = 'side'; const miss = PPTS.findIndex(p => !cur.ppts?.[p.k]); cur.pi = miss >= 0 ? miss : 0; renderMark(); scrollTo(0, 0); },
-  ptog: ({ i }) => togglePMetric(+i),
+  popen: ({ i }) => { listY = scrollY; renderProfileDetail(+i); scrollTo(0, 0); },
   home: () => { persist(true); renderHome(); scrollTo(0, 0); },
   tab({ t }) { renderResult(null, t); scrollTo(0, 0); },
-  tog: ({ i }) => toggleMetric(+i),
+  mopen: ({ i }) => { listY = scrollY; renderMetricDetail(+i); scrollTo(0, 0); },
+  gopen: ({ k }) => { listY = scrollY; renderGroupDetail(k); scrollTo(0, 0); },
   fix: ({ i }) => { renderFix(+i); scrollTo(0, 0); },
   fxreset() { fixRestore(); fixSeed(); fix.active = null; persist(); fixDraw(); fixInfo(); },
-  fxdone() { persist(true); renderResult(fix.i, 'harm'); },
+  fxdone() { persist(true); renderMetricDetail(fix.i); scrollTo(0, 0); },
   guide() { guideFrom = view; renderGuide(); scrollTo(0, 0); },
   back: goBack,
   settings() { renderSettings(); scrollTo(0, 0); },
@@ -1522,17 +1553,6 @@ const ACTIONS = {
   rskip() { cur.refPhase = false; cur.refDone = true; persist(true); renderResult(null, 'over'); scrollTo(0, 0); },
   swapgender() { cur.gender = gender() === 'male' ? 'female' : 'male'; persist(true); renderResult(null, tab); },
   rrate({ k }) { renderRefRate(k); scrollTo(0, 0); },
-  async gtog({ k }) {                                         // раскрыть пилюлю: контур, эталон и кнопка «Править»
-    const el = $('#gp-' + k), dt = el.querySelector('.det'); el.classList.toggle('open');
-    if (dt.dataset.f) return; dt.dataset.f = 1;
-    const v = cur.ref?.[k];
-    if (v == null) { dt.innerHTML = `<p class="mute">Оценка ещё не выставлена.</p><button class="btn" data-a="rrate" data-k="${k}">Оценить</button>`; return; }
-    dt.innerHTML = `<div class="refpair"><figure><img class="cv" id="gc-${k}" data-a="zoomsrc" alt=""><figcaption>Ваше фото</figcaption></figure>
-      <figure><img class="cv" data-a="zoomsrc" src="${refPath(k, v)}" alt="" onerror="this.style.visibility='hidden'"><figcaption>Эталон ${v} · ${refScore(v).toFixed(1)}/10</figcaption></figure></div>
-      <div class="mc">${curveSvg(refScore(v), true)}</div>
-      <button class="btn sec" data-a="rrate" data-k="${k}">Править</button>`;
-    try { const u = await regionImage(k); const im = $('#gc-' + k); if (im) im.src = u; } catch { toast('Не удалось построить контур'); }
-  },
   rpick({ i }) { rate.idx = +i; refShow(true); haptic(); },
   rsave() { refShow(true); haptic(); toast('Оценка сохранена'); },
   rclr() { delete cur.ref[rate.key]; persist(); refShow(false); },
