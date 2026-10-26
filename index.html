@@ -58,6 +58,7 @@ p{margin:6px 0 0}
 #lp:before,#lp:after{content:"";position:absolute;background:var(--red)}
 #lp:before{left:50%;top:calc(50% - 9px);width:1px;height:18px}#lp:after{top:50%;left:calc(50% - 9px);height:1px;width:18px}
 .nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;max-width:560px;margin:0 auto;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:#fffffff2;backdrop-filter:blur(8px);border-top:1px solid var(--line);z-index:5}
+.btn:disabled{opacity:.4;cursor:default}
 select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;background:#fff;padding:0 8px;font:600 13px Manrope;color:var(--ink)}
 /* вкладки-пилюли */
 .tabs{position:sticky;top:0;z-index:4;display:flex;gap:8px;overflow-x:auto;margin:10px -14px 0;padding:8px 14px;background:var(--bg);scrollbar-width:none}
@@ -738,12 +739,13 @@ function pGeom(m, rot) {
   (ex.full || []).forEach(l => full.push(l));
   return { sg, an, dash: [...an.flatMap(q => q.dash || []), ...(ex.dash || [])], full };
 }
-/* схема профильной метрики: всегда показывает всё лицо целиком (без приближения к зоне замера) */
+/* схема профильной метрики: приближение к зоне замера; всё лицо целиком — только у метрик с пометкой wide (Gonion to Mouth) */
 function pMeasureSvg(m) {
-  const rot = profRot(cur.ppts), g = pGeom(m, rot), vb = fullVB(cur.ppts, rot);
+  const rot = profRot(cur.ppts), g = pGeom(m, rot), pts = geomPts(g), vb = (m.wide || !pts.length) ? fullVB(cur.ppts, rot) : viewBoxFor(pts);
   return svgBase(vb, rot, '', { img: cur.pimg, w: cur.pw, h: cur.ph }) + geomSvg(g, vb.w, !m.clean) + '</svg>';
 }
 function renderProfileDetail(i) {
+  det = { kind: 'p', i };
   const m = PRES[i], keys = [...new Set([...(m.ln ? segs(m.ln).flat() : []), ...(m.keys || [])])].map(k => PPTS.find(p => p.k === k)).filter(Boolean);
   render('pdetail', `<div class="top"><h1>${m.name}</h1>${scoreHtml(m.score)}</div>
     <div class="mute">Tier ${m.tier}</div>
@@ -751,7 +753,7 @@ function renderProfileDetail(i) {
       <div class="gl">${keys.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
       <p><b>Значение:</b> ${m.txt ?? m.show(m.v)}</p>${m.min != null && m.max != null ? `<p><b>Идеал (Tier 1):</b> ${m.max >= 1e8 ? 'от ' + m.min : m.min + '–' + m.max}${m.u === 'мм' ? '' : m.u}</p>` : ''}
       <p><b>Tier ${m.tier} · оценка ${m.score.toFixed(1)}/10</b></p></div>
-    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
+    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>${detNav()}`, true);
 }
 
 /* =====================================================================
@@ -798,6 +800,7 @@ async function migrateOldDraft() {              // перенос чернови
    ===================================================================== */
 const app = $('#app');
 let view = 'home', guideFrom = 'home', RES = [], fix = null, tab = 'over', listY = 0;
+let det = null;                                  // открытая страница метрики: { kind: 'm' | 'p' | 'g', i } — для листания ‹ ›
 const dgm = (k, cls = '') => `<img class="${cls}" src="${IMG_DIR}/${k}.webp" loading="lazy" alt="" onerror="this.closest('.dgw,.gl figure')?.remove?.();this.remove()">`;
 const render = (v, html, nav = false) => {
   view = v; app.innerHTML = html; app.classList.toggle('has-nav', nav);
@@ -1005,13 +1008,20 @@ const PCATS = [
   ['Губы', ['Mentolabial Angle', "Rickett's E-Line", 'Holdaway H-Line', 'Steiner S-Line', 'Burstone Line']],
   ['Лоб и орбиты', ['Browridge Inclination Angle', 'Upper Forehead Slope', 'Orbital Vector']]
 ];
+/* порядок метрик: по настройке «Порядок метрик» (в т.ч. в Ангулярити / Диморфизм / Misc — см. groupKeys) */
+const sortFn = R => ({
+  best: (a, b) => R[b].score - R[a].score || (R[a].off || 0) - (R[b].off || 0),
+  worst: (a, b) => R[a].score - R[b].score || (R[b].off || 0) - (R[a].off || 0),
+  alpha: (a, b) => R[a].name.localeCompare(R[b].name)
+}[Settings.sort]);
+function pillOrder(R, cats) {                    // индексы метрик в том порядке, в каком они показаны в списке
+  const order = sortFn(R);
+  if (order) return R.map((m, i) => i).sort(order);
+  const idx = new Map(R.map((m, i) => [m.name, i])), used = new Set(cats.flatMap(c => c[1]));
+  return [...cats, ['Другое', R.filter(m => !used.has(m.name)).map(m => m.name)]].flatMap(([, names]) => names.filter(n => idx.has(n)).map(n => idx.get(n)));
+}
 function pillsHtml(R, cats, pillFn) {
-  const order = {
-    best: (a, b) => R[b].score - R[a].score || (R[a].off || 0) - (R[b].off || 0),
-    worst: (a, b) => R[a].score - R[b].score || (R[b].off || 0) - (R[a].off || 0),
-    alpha: (a, b) => R[a].name.localeCompare(R[b].name)
-  }[Settings.sort];
-  if (order) return `<div style="margin-top:12px"></div>` + R.map((m, i) => i).sort(order).map(i => pillFn(R[i], i)).join('');
+  if (sortFn(R)) return `<div style="margin-top:12px"></div>` + pillOrder(R, cats).map(i => pillFn(R[i], i)).join('');
   const idx = new Map(R.map((m, i) => [m.name, i])), used = new Set(cats.flatMap(c => c[1]));
   return [...cats, ['Другое', R.filter(m => !used.has(m.name)).map(m => m.name)]].map(([t, names]) => {
     const is = names.filter(n => idx.has(n)).map(n => idx.get(n));
@@ -1060,6 +1070,29 @@ const gPill = k => {
   const v = cur.ref?.[k];
   return `<div class="pill" data-a="gopen" data-k="${k}" style="cursor:pointer"><div class="ph"><span>${REGIONS[k].ru}</span>${v == null ? '<b class="sc">—</b>' : `<b class="sc">${refScore(v).toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b>`}<em>›</em></div></div>`;
 };
+/* области группы в порядке настройки «Порядок метрик» (так же, как в гармонии) */
+function groupKeys(g) {
+  const keys = allKeys().filter(k => REGIONS[k].g === g), sc = k => cur.ref?.[k] == null ? null : refScore(cur.ref[k]);
+  if (Settings.sort === 'alpha') keys.sort((a, b) => REGIONS[a].ru.localeCompare(REGIONS[b].ru));
+  else if (Settings.sort === 'best' || Settings.sort === 'worst') {
+    const sg = Settings.sort === 'best' ? 1 : -1;
+    keys.sort((a, b) => { const x = sc(a), y = sc(b); if (x == null || y == null) return (x == null) - (y == null); return (y - x) * sg; });
+  }
+  return keys;
+}
+/* листание ‹ › внутри страницы метрики: тот же порядок, что и в списке */
+const detOrder = () => det.kind === 'm' ? pillOrder(RES, CATS) : det.kind === 'p' ? pillOrder(PRES, PCATS) : groupKeys(REGIONS[det.i].g);
+const detName = x => det.kind === 'm' ? RES[x].name : det.kind === 'p' ? PRES[x].name : REGIONS[x].ru;
+function detNav() {
+  const o = detOrder(), p = o.indexOf(det.i);
+  return `<div class="nav"><button class="btn sec sq" data-a="dstep" data-d="-1" ${p > 0 ? '' : 'disabled'}>‹</button>
+    <select id="dsel">${o.map(x => `<option value="${x}" ${x === det.i ? 'selected' : ''}>${detName(x)}</option>`).join('')}</select>
+    <button class="btn sq" data-a="dstep" data-d="1" ${p >= 0 && p < o.length - 1 ? '' : 'disabled'}>›</button></div>`;
+}
+function openDetail(x) {
+  if (det.kind === 'm') renderMetricDetail(x); else if (det.kind === 'p') renderProfileDetail(x); else renderGroupDetail(x);
+  scrollTo(0, 0);
+}
 /* кривая оценки по эталонам — в том же виде, что и в гармонии */
 function refCurveCard(idx) {
   const L = 34, Rr = 332, T = 14, B = 130, N = FRAMES - 1;
@@ -1077,6 +1110,7 @@ function refCurveCard(idx) {
   return `<div class="mc"><div class="mch"><b>КРИВАЯ ОЦЕНКИ</b><span><i class="d1"></i>Идеал · <i class="d2"></i>Вы</span></div>${svg}</div>`;
 }
 function renderGroupDetail(k) {
+  det = { kind: 'g', i: k };
   const r = REGIONS[k], v = cur.ref?.[k];
   render('gdetail', `<div class="top"><h1>${r.ru}</h1>${v == null ? '<b class="sc">—</b>' : scoreHtml(refScore(v))}</div>
     <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}</div>
@@ -1086,17 +1120,12 @@ function renderGroupDetail(k) {
       <p style="margin-top:10px"><b>Ваш показатель:</b> ${refScore(v).toFixed(1)}/10</p></div>
       ${refCurveCard(v)}
       <div class="row"><button class="btn" data-a="rrate" data-k="${k}">Править</button></div>`}
-    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
+    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>${detNav()}`, true);
   if (v != null) regionImage(k).then(u => { const im = $('#gc'); if (view === 'gdetail' && im) im.src = u; }).catch(() => toast('Не удалось построить контур'));
 }
 function groupView(g) {
   const s = groupScore(g), top = s.score != null ? topOf(s.score) : null;
-  const keys = allKeys().filter(k => REGIONS[k].g === g), sc = k => cur.ref?.[k] == null ? null : refScore(cur.ref[k]);
-  if (Settings.sort === 'alpha') keys.sort((a, b) => REGIONS[a].ru.localeCompare(REGIONS[b].ru));
-  else if (Settings.sort === 'best' || Settings.sort === 'worst') {
-    const sg = Settings.sort === 'best' ? 1 : -1;
-    keys.sort((a, b) => { const x = sc(a), y = sc(b); if (x == null || y == null) return (x == null) - (y == null); return (y - x) * sg; });
-  }
+  const keys = groupKeys(g);
   return heroHtml(GROUPS[g].ru, fmtS(s.score), top != null ? `${label(s.score)} · Top ${fmtTop(top)}%` : 'Оцените области ниже') +
     curveCard('Где вы в популяции', s.score) +
     `<div class="card"><div class="top"><h3>Области</h3>${scoreHtml(s.score)}</div>
@@ -1183,14 +1212,15 @@ function geomSvg(g, vbw, ends = true) {
   if (ends) s += g.sg.flat().map(p => `<circle cx="${p.x}" cy="${p.y}" r="${sw * 1.7 * dk}" fill="#fff" stroke="${C}" stroke-width="${sw * .7}"/>`).join('');
   return s;
 }
-/* схема метрики гармонии (анфас): всё лицо целиком */
+/* схема метрики гармонии (анфас): приближение к зоне замера, как раньше */
 function measureSvg(m) {
-  const rot = faceFrame(), g = frameGeom(m, rot), vb = fullVB(cur.pts, rot);
+  const rot = faceFrame(), g = frameGeom(m, rot), pts = geomPts(g), vb = (m.wide || !pts.length) ? fullVB(cur.pts, rot) : viewBoxFor(pts);
   return svgBase(vb, rot) + geomSvg(g, vb.w) + '</svg>';
 }
 function refreshRes() { const A = analyze(cur.pts, Settings.level, cur.own); RES = A.R; cur.harmony = A.harmony; }
 function renderMetricDetail(i) {
   refreshRes();
+  det = { kind: 'm', i };
   const m = RES[i], used = [...new Set(segs(m.ln).flat())].map(k => PTS.find(p => p.k === k)).filter(Boolean);
   render('mdetail', `<div class="top"><h1>${m.name}</h1>${scoreHtml(m.score)}</div>
     ${FULL[m.name] ? `<div class="mute">${FULL[m.name]}</div>` : ''}
@@ -1199,7 +1229,7 @@ function renderMetricDetail(i) {
       <p><b>Значение:</b> ${fmtVal(m.v, m.u)} · <b>Норма:</b> ${m.min}–${m.max}${m.u}</p>
       <p><b>Оценка:</b> ${m.score.toFixed(1)}/10</p>
       <div class="row"><button class="btn sec" data-a="fix" data-i="${i}">Править точки замера</button></div></div>
-    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>`);
+    <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>${detNav()}`, true);
 }
 
 /* ---------- правка точек прямо по схеме замера ---------- */
@@ -1540,6 +1570,11 @@ const ACTIONS = {
   tab({ t }) { renderResult(null, t); scrollTo(0, 0); },
   mopen: ({ i }) => { listY = scrollY; renderMetricDetail(+i); scrollTo(0, 0); },
   gopen: ({ k }) => { listY = scrollY; renderGroupDetail(k); scrollTo(0, 0); },
+  dstep({ d }) {                                                       // листание метрик ‹ › внутри страницы метрики
+    const o = detOrder(), p = o.indexOf(det.i) + (+d);
+    if (p < 0 || p >= o.length) return;
+    openDetail(o[p]);
+  },
   fix: ({ i }) => { renderFix(+i); scrollTo(0, 0); },
   fxreset() { fixRestore(); fixSeed(); fix.active = null; persist(); fixDraw(); fixInfo(); },
   fxdone() { persist(true); renderMetricDetail(fix.i); scrollTo(0, 0); },
@@ -1573,6 +1608,7 @@ app.addEventListener('change', async e => {
   if (t.id === 'sel') { cur[K().key] = +t.value; persist(); renderMark(); scrollTo(0, 0); }
   else if (t.id === 'pfile' && t.files[0]) loadProfileFile(t.files[0]);
   else if (t.id === 'rsel') { renderRefRate(t.value); scrollTo(0, 0); }
+  else if (t.id === 'dsel') openDetail(det.kind === 'g' ? t.value : +t.value);
   else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' || t.tagName === 'SELECT' ? t.value : t.type === 'range' ? +t.value : t.checked; saveSettings(); applyBrand(); }
   else if (t.id === 'file' && t.files[0]) {
     try { cur = await createRecord(t.files[0]); await Store.put(cur); tab = 'over'; renderGender(); scrollTo(0, 0); }
