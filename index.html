@@ -68,6 +68,7 @@ select{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;backgr
 /* результат */
 .hero{position:relative;border-radius:24px;overflow:hidden;line-height:0;background:#222}
 .hero img{width:100%;max-height:70vh;object-fit:cover}
+.hero .hpair{position:static;display:flex;gap:2px;padding:0;background:none;line-height:0}.hero .hpair img{width:50%;height:min(52vh,360px);max-height:none}
 .hero div{position:absolute;inset:auto 0 0 0;padding:46px 18px 16px;line-height:1.2;color:#fff;display:flex;justify-content:space-between;align-items:flex-end;background:linear-gradient(transparent,#17606ad9)}
 .hero b{font-size:36px;font-weight:600}.hero span{font-size:12px;opacity:.85;display:block}
 .pill{background:#fff;border-radius:20px;padding:14px 16px;margin-top:10px;box-shadow:0 1px 8px #0a2a350d}
@@ -606,7 +607,7 @@ function tierScore(v, min, max, bl, bh) {
 const PM = [];
 function tm(name, ds, min, max, bl, bh, u, f, ln, an, o = {}) {
   const dom = o.dom || [min - bl[bl.length - 1] * 1.25, max + bh[bh.length - 1] * 1.25];
-  PM.push({ name, ds, min, max, u, f, ln, an, ex: o.ex, text: o.text, dom, keys: o.keys,
+  PM.push({ name, ds, min, max, u, f, ln, an, ex: o.ex, text: o.text, dom, keys: o.keys, wide: o.wide, clean: o.clean,
     sc: v => tierScore(v, min, max, bl, bh),
     tier: v => { const dv = v < min ? min - v : v > max ? v - max : 0; if (!dv) return 1; const B = v < min ? bl : bh, k = B.findIndex(b => dv <= b); return k < 0 ? B.length + 2 : k + 2; },
     show: v => v.toFixed(u === '°' ? 1 : 2) + u });
@@ -619,15 +620,14 @@ tm('Nasofrontal Angle', 'Угол в корне носа между линиям
   () => pang('nasion', 'glabella', 'supratip'), 'nasion-glabella,nasion-supratip', A3('nasion', 'glabella', 'supratip'));
 tm('Mandible Plane Angle', 'Угол в нижнем углу челюсти между линиями к подгубной складке и к низу подбородка', 15, 22, [1, 3, 5], [6, 8, 13], '°',
   () => pang('gonionBottom', 'sublabiale', 'menton'), 'gonionBottom-sublabiale,gonionBottom-menton', A3('gonionBottom', 'sublabiale', 'menton'));
-tm('Ramus to Mandible', 'Длина ветви (вырезка уха — верхний угол челюсти) к расстоянию по горизонтали от верхнего угла челюсти до франкфуртской вертикали через корень носа', .59, .77, [.03, .05, .10, .15], [.03, .05, .10, .15], 'x',
-  () => pdist('intertragicNotch', 'gonionTop') / (Math.abs(Qk('gonionTop').x - Qk('nasion').x) || 1), 'intertragicNotch-gonionTop', null,
-  { keys: ['gonionTop', 'nasion'], ex: R => { const g = R('gonionTop'), n = R('nasion'); return { sg: [[g, { x: n.x, y: g.y }]], full: [vline(n.x)] }; } });
+tm('Ramus to Mandible', 'Длина ветви (вырезка уха — верхний угол челюсти) к длине тела челюсти (верхний угол челюсти — menton)', .59, .77, [.03, .05, .10, .15], [.03, .05, .10, .15], 'x',
+  () => pdist('intertragicNotch', 'gonionTop') / (pdist('gonionTop', 'menton') || 1), 'intertragicNotch-gonionTop,gonionTop-menton');
 tm('Facial Convexity Glabella', 'Угол в субназале между линиями к глабелле и к подбородку', 168, 176, [3, 5, 8], [3, 5, 8], '°',
   () => pang('subnasale', 'glabella', 'pogonion'), 'subnasale-glabella,subnasale-pogonion', A3('subnasale', 'glabella', 'pogonion'));
 tm('Submental Cervical Angle', 'Угол в шейной точке между линиями к точке шеи и к низу подбородка', 90, 105, [5, 15, 20], [5, 15, 20], '°',
   () => pang('cervicalPoint', 'neckPoint', 'menton'), 'cervicalPoint-neckPoint,cervicalPoint-menton', A3('cervicalPoint', 'neckPoint', 'menton'));
-tm('Nasofacial Angle', 'Угол в корне носа между линиями к подбородку и к супратипу', 30, 36, [1, 2, 4, 7], [4, 6, 10, 11], '°',
-  () => pang('nasion', 'pogonion', 'supratip'), 'nasion-pogonion,nasion-supratip', A3('nasion', 'pogonion', 'supratip'));
+tm('Nasofacial Angle', 'Угол в корне носа между линиями к подбородку и к кончику носа', 30, 36, [1, 2, 4, 7], [4, 6, 10, 11], '°',
+  () => pang('nasion', 'pogonion', 'pronasale'), 'nasion-pogonion,nasion-pronasale', A3('nasion', 'pogonion', 'pronasale'));
 tm('Nasolabial Angle', 'Угол в субназале между линиями к верхней губе и к инфратипу', 94, 118, [4, 7, 13, 15, 18], [4, 7, 13, 15, 18], '°',
   () => pang('subnasale', 'labraleSuperius', 'infratip'), 'subnasale-labraleSuperius,subnasale-infratip', A3('subnasale', 'labraleSuperius', 'infratip'));
 PM.push({ name: 'Orbital Vector', ds: 'Насколько орбитале впереди (+) или позади (−) вертикали через вершину роговицы, в % от высоты лица', min: 2.5, max: 8, u: '%', dom: [-5, 5],
@@ -672,7 +672,7 @@ tm('Nasomental Angle', 'Угол в кончике носа между лини�
   () => pang('pronasale', 'nasion', 'pogonion'), 'pronasale-nasion,pronasale-pogonion', A3('pronasale', 'nasion', 'pogonion'));
 tm('Gonion to Mouth', 'Положение верхнего угла челюсти относительно уровня уголка рта (в % высоты лица, + = ниже рта)', .5, 1e9, [2, 6], [], '%',
   () => (Qk('gonionTop').y - Qk('cheilion').y) / faceH() * 100, '', null,
-  { dom: [-10, 6], keys: ['gonionTop', 'cheilion'], ex: R => { const g = R('gonionTop'), c = R('cheilion'); return { full: [hline(c.y)], sg: [[g, { x: g.x, y: c.y }]] }; } });
+  { wide: true, dom: [-10, 6], keys: ['gonionTop', 'cheilion'], ex: R => { const g = R('gonionTop'), c = R('cheilion'); return { full: [hline(c.y)], sg: [[g, { x: g.x, y: c.y }]] }; } });
 tm('Recession Relative to Frankfort Plane', 'Положение подбородка относительно вертикали через глабеллу (в % высоты лица, − = отступает)', -2, 1e9, [4, 8], [], '%',
   () => (Qk('pogonion').x - Qk('glabella').x) * PC.f / faceH() * 100, '', null,
   { dom: [-14, 4], keys: ['glabella', 'pogonion'], ex: R => { const g = R('glabella'), pg = R('pogonion'); return { full: [vline(g.x)], sg: [[pg, { x: g.x, y: pg.y }]] }; } });
@@ -682,6 +682,24 @@ tm('Browridge Inclination Angle', 'Наклон линии глабелла — 
   { ex: R => ({ full: [vline(R('glabella').x)] }) });
 tm('Nasal Tip Angle', 'Угол в кончике носа между линиями к супратипу и к инфратипу', 112, 125, [3, 7, 12, 15], [3, 7, 12, 15], '°',
   () => pang('pronasale', 'supratip', 'infratip'), 'pronasale-supratip,pronasale-infratip', A3('pronasale', 'supratip', 'infratip'));
+
+/* ---- новые профильные метрики ---- */
+const fhY = R => (R('porion').y + R('orbitale').y) / 2;             // уровень франкфуртской горизонтали (после поворота)
+const zHit = (pg, st, y) => { const dy = st.y - pg.y; return Math.abs(dy) < 1e-6 ? null : { x: pg.x + (st.x - pg.x) * (y - pg.y) / dy, y }; };
+tm('Upper Forehead Slope', 'Угол в глабелле между линиями к линии роста волос и ко лбу (+ = лоб впереди линии глабелла — волосы, верх лба скошен назад)', 0, 2, [2, 4, 6], [5, 8.5, 12], '°',
+  () => { const g = Qk('glabella'), a = sub(Qk('trichion'), g), b = sub(Qk('forehead'), g); return deg(Math.atan2(PC.f * (a.x * b.y - a.y * b.x), a.x * b.x + a.y * b.y)); },
+  'glabella-trichion,glabella-forehead', A3('glabella', 'trichion', 'forehead'), { dom: [-4, 14] });
+tm('Facial Depth to Height Ratio', 'Глубина лица (трагион — субназале) к высоте (корень носа — подгубная складка)', 1.30, 1.44, [.1, .2, .3], [.1, .2, .3], 'x',
+  () => pdist('tragus', 'subnasale') / (pdist('nasion', 'sublabiale') || 1), 'nasion-sublabiale,tragus-subnasale');
+tm('Interior Midface Projection Angle', 'Угол в субаларе между линией к латеральному краю века и горизонталью, идущей до вертикали от края века', 53, 60, [4, 8, 14, 20], [4, 8, 14, 20], '°',
+  () => { const s0 = Qk('subalare'), e = Qk('eyelidEnd'); return deg(Math.atan2(Math.abs(e.y - s0.y), Math.abs(e.x - s0.x))); },
+  'subalare-eyelidEnd', R => { const s0 = R('subalare'), e = R('eyelidEnd'), X = { x: e.x, y: s0.y }; return [{ v: s0, a: e, b: X, dash: [[s0, X], [e, X]] }]; });
+tm('Anterior Facial Depth', 'Угол в субаларе между линиями к трагиону и к нижнему веку', 64.5, 67.5, [8, 16, 24, 32], [8, 16, 24, 32], '°',
+  () => pang('subalare', 'tragus', 'lowerEyelid'), 'subalare-tragus,subalare-lowerEyelid', A3('subalare', 'tragus', 'lowerEyelid'));
+tm('Z Angle', 'Угол между франкфуртской плоскостью и линией подбородок — супратип, продолженной до плоскости', 78, 82, [5, 10, 15, 22], [5, 10, 15, 22], '°',
+  () => { const pg = Qk('pogonion'), st = Qk('supratip'), fy = (Qk('porion').y + Qk('orbitale').y) / 2, P0 = zHit(pg, st, fy); return P0 ? angV({ x: -PC.f, y: 0 }, sub(pg, P0)) : NaN; },
+  '', R => { const pg = R('pogonion'), st = R('supratip'), P0 = zHit(pg, st, fhY(R)); if (!P0) return []; const L = Math.hypot(pg.x - P0.x, pg.y - P0.y) * .8; return [{ v: P0, a: pg, b: { x: P0.x - PC.f * L, y: P0.y }, dash: [[P0, { x: P0.x - PC.f * L, y: P0.y }]] }]; },
+  { keys: ['pogonion', 'supratip', 'porion', 'orbitale'], ex: R => { const pg = R('pogonion'), st = R('supratip'), P0 = zHit(pg, st, fhY(R)); return { full: [hline(fhY(R))], sg: P0 ? [[pg, P0]] : [] }; } });
 
 function analyzeProfile(pts) {
   PC = profCtx(pts);
@@ -701,14 +719,20 @@ function pGeom(m, rot) {
   const R = k => rotPt(cur.ppts[k], rot), ex = m.ex ? m.ex(R) : {}, an = m.an ? m.an(R) : [];
   const sg = (m.ln ? segs(m.ln) : []).map(([a, b]) => [R(a), R(b)]).concat(ex.sg || []);
   const full = [];
-  if (cur.ppts.nasion) full.push(vline(R('nasion').x));      // вертикаль на уровне nasion
-  if (cur.ppts.tragus) full.push(hline(R('tragus').y));      // горизонталь на уровне tragus (параллельна франкфуртской)
+  if (!m.clean && cur.ppts.nasion) full.push(vline(R('nasion').x));      // вертикаль на уровне nasion
+  if (!m.clean && cur.ppts.tragus) full.push(hline(R('tragus').y));      // горизонталь на уровне tragus (параллельна франкфуртской)
   (ex.full || []).forEach(l => full.push(l));
   return { sg, an, dash: [...an.flatMap(q => q.dash || []), ...(ex.dash || [])], full };
 }
 function pMeasureSvg(m) {
-  const rot = profRot(cur.ppts), g = pGeom(m, rot), vb = viewBoxFor(geomPts(g));
-  return svgBase(vb, rot, '', { img: cur.pimg, w: cur.pw, h: cur.ph }) + geomSvg(g, vb.w) + '</svg>';
+  const rot = profRot(cur.ppts), g = pGeom(m, rot);
+  let vb;
+  if (m.wide) {                                   // показать всё фото целиком (с учётом поворота)
+    const c = [[0, 0], [cur.pw, 0], [cur.pw, cur.ph], [0, cur.ph]].map(([x, y]) => rotPt({ x, y }, rot));
+    const x0 = Math.min(...c.map(p => p.x)), x1 = Math.max(...c.map(p => p.x)), y0 = Math.min(...c.map(p => p.y)), y1 = Math.max(...c.map(p => p.y));
+    vb = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  } else vb = viewBoxFor(geomPts(g));
+  return svgBase(vb, rot, '', { img: cur.pimg, w: cur.pw, h: cur.ph }) + geomSvg(g, vb.w, !m.clean) + '</svg>';
 }
 function togglePMetric(i) {
   const el = $('#pp' + i), m = PRES[i], dt = el.querySelector('.det');
@@ -809,7 +833,7 @@ function renderSettings() {
 }
 
 function renderGender() {
-  render('gender', `<h1>Кого анализируем?</h1><div class="mute">Нужно для эталонов: диморфизм, ангулярити, Misc</div>
+  render('gender', `<h1>Кого анализируем?</h1><div class="mute">Нужно для эталонов. Дальше: оценка диморфизма, ангулярити и Misc по эталонам, затем разметка точек</div>
     <div class="card"><div class="row" style="margin-top:0"><button class="btn" data-a="setgender" data-v="male">Мужчина</button><button class="btn" data-a="setgender" data-v="female">Женщина</button></div></div>`);
 }
 
@@ -899,12 +923,33 @@ function finish() {
   const k = K(), miss = k.list.findIndex(p => !k.pts[p.k]);
   if (miss >= 0) { cur[k.key] = miss; persist(); renderMark(); scrollTo(0, 0); return toast(`Не поставлена точка: ${k.list[miss].ru}`); }
   if (kind === 'side') { hsub = 'side'; return renderResult(null, 'harm'); }
+  if (!cur.pimg && !cur.pAsked) return offerProfile();
   renderResult(null, 'over');
+}
+async function offerProfile() {
+  const yes = await ask('Разметка анфаса готова. Добавить фото профиля для оценки профильных метрик?');
+  cur.pAsked = true; persist(true);
+  if (!yes) return renderResult(null, 'over');
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' });
+  inp.onchange = () => inp.files[0] ? loadProfileFile(inp.files[0]) : renderResult(null, 'over');
+  inp.addEventListener('cancel', () => renderResult(null, 'over'));
+  inp.click();
+}
+async function loadProfileFile(file) {
+  try {
+    const im = await loadImage(file), b = scaled(im, 1200, .88);
+    Object.assign(cur, { pimg: b.url, pw: b.w, ph: b.h, ppts: {}, pi: 0, pHarmony: null });
+    kind = 'side'; persist(true); renderMark(); scrollTo(0, 0);
+  } catch (err) { toast(err.message || 'Не удалось загрузить фото'); }
 }
 
 /* ---------- результат: вкладки-пилюли ---------- */
 const TABS = [['over', 'Обзор'], ['harm', 'Гармония'], ['ANGU', 'Ангулярити'], ['DIMO', 'Диморфизм'], ['MISC', 'Misc']];
-const heroHtml = (t, sc, sub) => `<div class="hero" style="margin-top:12px"><img src="${cur.img}" alt=""><div><span style="font-size:15px;opacity:1">${t}</span>
+const heroImgs = imgs => {
+  const L = (imgs && imgs.length ? imgs : [cur.img]).filter(Boolean);
+  return L.length > 1 ? `<div class="hpair">${L.map(u => `<img src="${u}" alt="">`).join('')}</div>` : `<img src="${L[0]}" alt="">`;
+};
+const heroHtml = (t, sc, sub, imgs) => `<div class="hero${imgs ? '' : ''}" style="margin-top:12px">${heroImgs(imgs)}<div><span style="font-size:15px;opacity:1">${t}</span>
   <p style="text-align:right;margin:0"><b>${sc}</b><small style="color:#fffc"> /10</small><span>${sub}</span></p></div></div>`;
 const scoreHtml = v => `<b class="sc">${fmtS(v)}<small style="font-size:12px;color:var(--mute)">/10</small></b>`;
 const curveCard = (title, sc, note = '') => `<div class="card curve"><h3>${title}</h3>${curveSvg(sc)}${note}</div>`;
@@ -924,21 +969,22 @@ function overView() {
   const tabOf = k => k === 'harm' ? 'harm' : k.toUpperCase();
   const rows = Object.keys(W).map(k =>
     `<div class="rrow" data-a="tab" data-t="${tabOf(k)}"><span>${WNAME[k]}<small class="full">вес ${W[k]}${k === 'harm' ? ` · анфас ${fmtS(cur.harmony)} · профиль ${fmtS(cur.pHarmony)}` : ''}</small></span><b>${fmtS(f.parts[k])}</b><em>›</em></div>`).join('');
-  return heroHtml('Итоговая оценка', f.ready ? f.total.toFixed(1) : '—', f.ready ? `${label(f.total)} · Top ${fmtTop(top)}%` : 'Оцените все 4 столпа') +
+  return heroHtml('Итоговая оценка', f.ready ? f.total.toFixed(1) : '—', f.ready ? `${label(f.total)} · Top ${fmtTop(top)}%` : 'Оцените все 4 столпа', [cur.img, cur.pimg]) +
     curveCard('Где вы в популяции', f.ready ? f.total : null,
       f.ready ? `<p class="mute" style="font-size:12px">Примерно 1 из ${Math.max(1, Math.round(100 / top)).toLocaleString('ru-RU')} человек.</p>`
               : '<p class="mute" style="font-size:12px">Метка появится, когда будут оценены все 4 столпа.</p>') +
     `<div class="card"><h3>Столпы</h3>${rows}
-      <div class="rrow" style="cursor:default"><span><b>Итог</b><small class="full">${f.ready ? '0.40·гармония + 0.15·диморфизм + 0.25·ангулярити + 0.20·misc' : 'Оцените все 4 столпа, чтобы получить итог'}</small></span>
+      <div class="rrow" style="cursor:default"><span><b>Итог</b>${f.ready ? '' : '<small class="full">Оцените все 4 столпа, чтобы получить итог</small>'}</span>
         <b class="sc">${f.ready ? f.total.toFixed(1) : '—'}<small style="font-size:12px;color:var(--mute)">/10</small></b></div></div>`;
 }
 
 const PCATS = [
   ['Челюсть и шея', ['Gonial Angle', 'Mandible Plane Angle', 'Ramus to Mandible', 'Submental Cervical Angle', 'Gonion to Mouth']],
   ['Нос', ['Nasofrontal Angle', 'Nasofacial Angle', 'Nasolabial Angle', 'Nasal Projection', 'Nasal Width to Height Projection', 'Nasal Tip Angle', 'Nasomental Angle']],
-  ['Выпуклость и подбородок', ['Facial Convexity Glabella', 'Total Facial Convexity', 'Facial Convexity Nasion', 'Recession Relative to Frankfort Plane']],
+  ['Выпуклость и подбородок', ['Facial Convexity Glabella', 'Total Facial Convexity', 'Facial Convexity Nasion', 'Recession Relative to Frankfort Plane', 'Z Angle']],
+  ['Глубина и середина лица', ['Facial Depth to Height Ratio', 'Interior Midface Projection Angle', 'Anterior Facial Depth']],
   ['Губы', ['Mentolabial Angle', "Rickett's E-Line", 'Holdaway H-Line', 'Steiner S-Line', 'Burstone Line']],
-  ['Лоб и орбиты', ['Browridge Inclination Angle', 'Orbital Vector']]
+  ['Лоб и орбиты', ['Browridge Inclination Angle', 'Upper Forehead Slope', 'Orbital Vector']]
 ];
 function pillsHtml(R, cats, pillFn) {
   const order = {
@@ -984,7 +1030,9 @@ function sideView() {
 function harmView(A) {
   const h = combinedHarmony();
   const seg = `<div class="seg"><button class="${hsub === 'front' ? 'on' : ''}" data-a="sub" data-s="front">Анфас<b>${fmtS(cur.harmony)}</b></button><button class="${hsub === 'side' ? 'on' : ''}" data-a="sub" data-s="side">Профиль<b>${fmtS(cur.pHarmony)}</b></button></div>`;
-  return heroHtml('Гармония', h.toFixed(1), `${label(h)} · Top ${fmtTop(topOf(h))}%`) + curveCard('Где вы в популяции', h) + seg +
+  const side = hsub === 'side' && cur.pHarmony != null, hv = side ? cur.pHarmony : cur.harmony;
+  const both = cur.pHarmony != null ? ` · общая ${h.toFixed(1)}` : '';
+  return heroHtml(side ? 'Гармония · профиль' : 'Гармония · анфас', hv.toFixed(1), `${label(hv)} · Top ${fmtTop(topOf(hv))}%${both}`, [hsub === 'side' && cur.pimg ? cur.pimg : cur.img]) + curveCard('Где вы в популяции', hv) + seg +
     (hsub === 'side' ? sideView() : pillsHtml(A.R, CATS, fPill) + strengthsHtml(A.R));
 }
 
@@ -1285,10 +1333,15 @@ const getImg = async () => imgCache[cur.id] || (imgCache[cur.id] = await new Pro
 }));
 const trace = (g, pts, close) => { g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); if (close) g.closePath(); };
 async function regionImage(key, px = 640) {
-  const im = await getImg(), rot = faceFrame();
-  const q = PTS.filter(p => cur.pts[p.k]).map(p => rotPt(cur.pts[p.k], rot));
-  const xs = q.map(a => a.x), ys = q.map(a => a.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-  const S = Math.max(x1 - x0, y1 - y0) * 1.45, ox = (x0 + x1) / 2 - S / 2, oy = (y0 + y1) / 2 - S / 2, k = px / S;
+  const im = await getImg(), have = PTS.filter(p => cur.pts[p.k]).length >= 6;     // точки ещё не расставлены → всё фото без выравнивания
+  let rot = 0; if (have) { try { rot = faceFrame() || 0; } catch {} }
+  let S, ox, oy, k;
+  if (have) {
+    const q = PTS.filter(p => cur.pts[p.k]).map(p => rotPt(cur.pts[p.k], rot));
+    const xs = q.map(a => a.x), ys = q.map(a => a.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    S = Math.max(x1 - x0, y1 - y0) * 1.45; ox = (x0 + x1) / 2 - S / 2; oy = (y0 + y1) / 2 - S / 2;
+  } else { S = Math.max(cur.w, cur.h); ox = cur.w / 2 - S / 2; oy = cur.h / 2 - S / 2; }
+  k = px / S;
   const c = Object.assign(document.createElement('canvas'), { width: px, height: px }), g = c.getContext('2d');
   g.fillStyle = '#566064'; g.fillRect(0, 0, px, px);
   g.save(); g.scale(k, k); g.translate(-ox, -oy); g.rotate(rot); g.drawImage(im, 0, 0, cur.w, cur.h); g.restore();
@@ -1336,7 +1389,7 @@ function renderRefRate(key) {
   rate = { key, idx: saved ?? Math.round((FRAMES - 1) / 2) };
   const strip = Array.from({ length: FRAMES }, (_, n) => `<figure data-a="rpick" data-i="${n}" id="th${n}"><img loading="lazy" src="${refPath(key, n)}" alt="" onerror="this.remove()"><b>${n}</b></figure>`).join('');
   render('refrate', `<div class="top"><h1>${r.ru}</h1><span class="mute">${i + 1}/${keys.length}</span></div>
-    <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}</div>
+    <div class="mute">${GROUPS[r.g].ru} · ${gender() === 'male' ? 'мужчина' : 'женщина'}${cur.prePhase ? ' · шаг 1 из 2: оценка по эталонам' : ''}</div>
     <div class="refpair"><figure><img class="cv" id="rc" data-a="zoomsrc" alt=""><figcaption>Ваше фото</figcaption></figure>
       <figure><img class="cv" id="rf" data-a="zoomsrc" alt=""><figcaption id="rcap"></figcaption></figure></div>
     <div class="card curve" id="rcurve"></div>
@@ -1344,7 +1397,8 @@ function renderRefRate(key) {
       <div class="strip" id="strip">${strip}</div>
       <p class="mute" style="font-size:12px">Двигайте ползунок или нажмите на кадр: выберите эталон, на который контур похож больше всего. Нажмите на картинку, чтобы увеличить.</p>
       <div class="row"><button class="btn sec" data-a="rsave">Сохранить оценку</button></div>
-      <button class="lnk" data-a="rclr">Сбросить оценку</button></div>
+      <button class="lnk" data-a="rclr">Сбросить оценку</button>
+      ${cur.prePhase ? '<button class="lnk" data-a="rskip" style="margin-left:14px">Пропустить к разметке точек</button>' : ''}</div>
     <div class="nav"><button class="btn sec sq" data-a="rprev">‹</button>
       <select id="rsel">${keys.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${cur.ref?.[k] != null ? '✓ ' : ''}${REGIONS[k].ru}</option>`).join('')}</select>
       <button class="btn sq" data-a="rnext">›</button></div>`, true);
@@ -1368,7 +1422,10 @@ function refShow(save = true) {
 function rateStep(s) {
   const keys = allKeys(), i = keys.indexOf(rate.key) + s;
   if (i < 0) return;
-  if (i >= keys.length) return renderResult(null, REGIONS[rate.key].g);
+  if (i >= keys.length) {
+    if (cur.prePhase) { cur.prePhase = false; persist(true); kind = 'front'; renderMark(); return scrollTo(0, 0); }   // дальше — разметка точек
+    return renderResult(null, REGIONS[rate.key].g);
+  }
   renderRefRate(keys[i]); scrollTo(0, 0);
 }
 
@@ -1380,12 +1437,13 @@ const openRecord = async id => {
   cur = r; kind = 'front'; hsub = 'front'; cur.own = cur.own || {}; cur.ref = cur.ref || {}; cur.ppts = cur.ppts || {};
   if (isComplete(r)) { cur.gender = cur.gender || 'male'; tab = 'over'; renderResult(null, 'over'); }
   else if (!cur.gender) renderGender();
+  else if (cur.prePhase) renderRefRate(allKeys().find(k => cur.ref?.[k] == null) || allKeys()[0]);
   else { const miss = PTS.findIndex(p => !r.pts[p.k]); cur.i = miss >= 0 ? miss : 0; renderMark(); }
   scrollTo(0, 0);
 };
 const goBack = () => {
   if (view === 'fix') { fixRestore(); persist(true); return renderResult(fix.i, 'harm'); }
-  if (view === 'refrate') { persist(true); return renderResult(null, REGIONS[rate.key].g); }
+  if (view === 'refrate') { persist(true); return cur.prePhase ? renderHome() : renderResult(null, REGIONS[rate.key].g); }
   if (view === 'settings') return renderHome();
   if (view === 'guide') return ({ settings: renderSettings, mark: () => cur ? renderMark() : renderHome(), result: () => cur ? renderResult() : renderHome() }[guideFrom] || renderHome)();
   persist(true); renderHome();
@@ -1416,7 +1474,14 @@ const ACTIONS = {
   guide() { guideFrom = view; renderGuide(); scrollTo(0, 0); },
   back: goBack,
   settings() { renderSettings(); scrollTo(0, 0); },
-  setgender({ v }) { kind = 'front'; cur.gender = v; persist(true); renderMark(); scrollTo(0, 0); },
+  setgender({ v }) {
+    kind = 'front'; cur.gender = v;
+    cur.prePhase = allKeys().some(k => cur.ref?.[k] == null);   // сначала оцениваем диморфизм/ангулярити/Misc, потом точки
+    persist(true);
+    if (cur.prePhase) renderRefRate(allKeys().find(k => cur.ref?.[k] == null) || allKeys()[0]); else renderMark();
+    scrollTo(0, 0);
+  },
+  rskip() { cur.prePhase = false; persist(true); kind = 'front'; renderMark(); scrollTo(0, 0); },
   swapgender() { cur.gender = gender() === 'male' ? 'female' : 'male'; persist(true); renderResult(null, tab); },
   rrate({ k }) { renderRefRate(k); scrollTo(0, 0); },
   rpick({ i }) { rate.idx = +i; refShow(true); haptic(); },
@@ -1437,13 +1502,7 @@ app.addEventListener('input', e => { if (e.target.id === 'rs' && rate) { rate.id
 app.addEventListener('change', async e => {
   const t = e.target;
   if (t.id === 'sel') { cur[K().key] = +t.value; persist(); renderMark(); scrollTo(0, 0); }
-  else if (t.id === 'pfile' && t.files[0]) {
-    try {
-      const im = await loadImage(t.files[0]), b = scaled(im, 1200, .88);
-      Object.assign(cur, { pimg: b.url, pw: b.w, ph: b.h, ppts: {}, pi: 0, pHarmony: null });
-      kind = 'side'; persist(true); renderMark(); scrollTo(0, 0);
-    } catch (err) { toast(err.message || 'Не удалось загрузить фото'); }
-  }
+  else if (t.id === 'pfile' && t.files[0]) loadProfileFile(t.files[0]);
   else if (t.id === 'rsel') { renderRefRate(t.value); scrollTo(0, 0); }
   else if (t.dataset.set) { Settings[t.dataset.set] = t.type === 'color' || t.tagName === 'SELECT' ? t.value : t.type === 'range' ? +t.value : t.checked; saveSettings(); }
   else if (t.id === 'file' && t.files[0]) {
