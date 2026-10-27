@@ -1453,7 +1453,7 @@ const allKeys = () => Object.keys(REGIONS).filter(k => !REGIONS[k].only || REGIO
 const fmtS = v => v == null ? '—' : v.toFixed(1);
 function groupScore(g) {
   const keys = allKeys().filter(k => REGIONS[k].g === g), done = keys.filter(k => cur.ref?.[k] != null);
-  return { n: done.length, total: keys.length, score: done.length ? done.reduce((t, k) => t + refScore(cur.ref[k]), 0) / done.length : null };
+  return { n: done.length, total: keys.length, score: done.length ? done.reduce((t, k) => t + refScore(cur.ref[k]), 0) / keys.length : null };   // сумма баллов / количество метрик группы (неоценённые = 0)
 }
 
 /* Если имя папки с эталонами отличается от названия в приложении — укажите его здесь */
