@@ -449,9 +449,9 @@ metric('PFL to Biozygo', 'Ширина глаза к ширине скул', 19.
    ===================================================================== */
 const DEV_STEP = 2;                                  // сколько % отклонения снимает 1 балл
 const tolOf = m => Math.max((m.max - m.min) / 2, 1e-9);
-/* Тиры → баллы: T1 = 10 (внутри идеала), T1.5 = 7.5, T2 = 5, T3 = 2.5, T4 = 0, T5 = −5.
+/* Тиры → баллы: T1 = 10 (внутри идеала), T1.5 = 7.5, T2 = 5, T3 = 2.5, T4 = 0, T5 = −2.5.
    Уровень определяется отклонением от ближайшей границы идеала в % от этой границы (метрики без явной карты). */
-const T_OUT = [7.5, 5, 2.5, 0, -5];                   // баллы за выход из идеала: T1.5, T2, T3, T4, T5
+const T_OUT = [7.5, 5, 2.5, 0, -2.5];                 // баллы за выход из идеала: T1.5, T2, T3, T4, T5
 const T_REL = [1.5, 4, 7, 35];                        // верхние границы отклонения (%) для T1.5, T2, T3, T4; дальше — T5
 function scoreMetric(m, v) {
   const mid = (m.min + m.max) / 2, off = Math.abs(v - mid) / tolOf(m);
@@ -517,12 +517,12 @@ function metricCurveCard(m) {
   const L = 34, Rr = 332, T = 14, B = 130;
   const pad = Math.max(.22 * Math.abs(m.min), .22 * Math.abs(m.max), 1e-6);
   const lo = m.dom ? m.dom[0] : (m.min === 0 ? 0 : m.min - pad), hi = m.dom ? m.dom[1] : m.max + pad;
-  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * (sc + 5) / 15;
+  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * (sc + 2.5) / 12.5;
   const N = 90, pts = Array.from({ length: N + 1 }, (_, i) => { const x = lo + (hi - lo) * i / N; return { x: X(x), y: Y(m.sc ? m.sc(x) : scoreMetric(m, x).score) }; });
   const dd = 'M' + pts.map(q => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join('L');
   const fl = x => x.toFixed(m.u === 'x' ? 2 : 1) + m.u;
   let g = '';
-  [-5, 0, 5, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
+  [-2.5, 0, 5, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
   const vv = clamp(m.v, lo, hi), mx = X(vv), my = Y(m.score);
   const svg = `<svg viewBox="0 0 340 158"><defs><linearGradient id="mgrad" gradientUnits="userSpaceOnUse" x1="0" y1="${B}" x2="0" y2="${T}">
       <stop offset="0" stop-color="#9a4b3f"/><stop offset=".4" stop-color="#b58a3a"/><stop offset=".7" stop-color="#4f8c68"/><stop offset="1" stop-color="#1f6b7a"/></linearGradient></defs>
@@ -736,7 +736,7 @@ function analyzeProfile(pts) {
     const bad = !isFinite(v); if (bad) v = 0;
     let score = 0, tier = 0, txt = null;
     try { score = bad ? 0 : m.sc(v); tier = m.tier(v); txt = m.text ? m.text() : null; } catch {}
-    return { ...m, v, bad, score: clamp(score, -5, 10), tier, txt };
+    return { ...m, v, bad, score: clamp(score, -2.5, 10), tier, txt };
   });
   const okP = R.filter(m => !m.bad);
   return { R, harmony: okP.length ? clamp(okP.reduce((t, m) => t + m.score, 0) / okP.length, 0, 10) : 0 };
