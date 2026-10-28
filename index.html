@@ -428,7 +428,7 @@ metric('Jaw Frontal Angle', 'Угол, под которым линии нижн
 metric('IAA–JFA Deviation', 'Разница между Ipsilateral Alar Angle и Jaw Frontal Angle', 0, 2.5, '°', 1, () => Math.abs(iaa() - jfa()), 'noseBottom-leftEyeLateralCanthus,noseBottom-rightEyeLateralCanthus,leftBottomGonion-chinLeft,rightBottomGonion-chinRight',
   R => [...iaaGeom(R), ...jfaGeom(R)]);
 metric('Eyebrows Tilt', 'Наклон бровей: угол линии «внутренний угол — изгиб (пик)» к горизонтали от внутреннего угла', 5, 13, '°', 1, btilt, '$BrowInnerCorner-$BrowArch', browGeom);
-metric('Jaw Gonial Slope', 'Угол в верхнем углу челюсти между скулой и подбородком', 140, 142.5, '°', 1, () => avg(s => ang(s + 'TopGonion', s + 'Cheek', 'chin' + cap(s))),
+metric('Jaw Gonial Slope', 'Угол в верхнем углу челюсти между скулой и подбородком', 140, 145, '°', 1, () => avg(s => ang(s + 'TopGonion', s + 'Cheek', 'chin' + cap(s))),
   'leftCheek-leftTopGonion,leftTopGonion-chinLeft,rightCheek-rightTopGonion,rightTopGonion-chinRight',
   R => sides(s => tri(R, s + 'TopGonion', s + 'Cheek', 'chin' + cap(s))), true);
 metric('Lower Third Proportions', 'Доля верхней губы (низ носа — центр рта) в нижней трети', 31, 33.5, '%', 1, () => d('noseBottom', 'mouthMiddle') / d('noseBottom', 'chinBottom') * 100, 'noseBottom-mouthMiddle,mouthMiddle-chinBottom');
@@ -453,13 +453,25 @@ const tolOf = m => Math.max((m.max - m.min) / 2, 1e-9);
    Уровень определяется отклонением от ближайшей границы идеала в % от этой границы (метрики без явной карты). */
 const T_OUT = [7.5, 5, 2.5, 0, -2.5];                 // баллы за выход из идеала: T1.5, T2, T3, T4, T5
 const T_REL = [1.5, 4, 7, 35];                        // верхние границы отклонения (%) для T1.5, T2, T3, T4; дальше — T5
+/* Полная лестница (шаг между целыми тирами 2.5, полутира — середина):
+   T1.5=7.5  T2=5  T2.5=3.75  T3=2.5  T3.5=1.25  T4=0  T4.5=-1.25  T5=-2.5  T6=-5  T7=-7.5
+   Для метрик из TIER_MAP границы заданы вручную: абсолютное отклонение от границы идеала, по порядку
+   [T1.5, T2, T2.5, T3, T3.5, T4, T4.5, T5, T6]; дальше последней границы — T7. */
+const T_FULL = [7.5, 5, 3.75, 2.5, 1.25, 0, -1.25, -2.5, -5, -7.5];
+const TIER_MAP = {
+  'Nose to Mouth Width': [.0125, .025, .0375, .05, .0625, .075, .0875, .10, .12],   // 1.27 при идеале 1.38–1.53 → T6
+  'Alar to Bridge': [.05, .1, .15, .2, .3, .4, .5, .6, .8],                         // 3.00 при идеале 2–2.1 → T7
+  'IAA–JFA Deviation': [.5, 1, 2, 4, 5, 6, 7, 8, 10]                                // 6° при идеале 0–2.5 → T3
+};
 function scoreMetric(m, v) {
   const mid = (m.min + m.max) / 2, off = Math.abs(v - mid) / tolOf(m);
   const abs = v < m.min ? m.min - v : v > m.max ? v - m.max : 0;
   const bound = v < m.min ? m.min : m.max, base = Math.abs(bound) > 1e-9 ? Math.abs(bound) : (Math.abs(m.max - m.min) || 1);
   const dev = abs / base * 100;
   let score = 10;
-  if (abs > 0) { const k = T_REL.findIndex(b => dev <= b); score = T_OUT[k < 0 ? T_OUT.length - 1 : k]; }
+  const tr = TIER_MAP[m.name];
+  if (abs > 0 && tr) { const k = tr.findIndex(b => abs <= b); score = T_FULL[k < 0 ? T_FULL.length - 1 : k]; }
+  else if (abs > 0) { const k = T_REL.findIndex(b => dev <= b); score = T_OUT[k < 0 ? T_OUT.length - 1 : k]; }
   return { dev, z: dev, score, off };
 }
 const fmtDev = x => x.toFixed(1) + '%';
@@ -517,12 +529,12 @@ function metricCurveCard(m) {
   const L = 34, Rr = 332, T = 14, B = 130;
   const pad = Math.max(.22 * Math.abs(m.min), .22 * Math.abs(m.max), 1e-6);
   const lo = m.dom ? m.dom[0] : (m.min === 0 ? 0 : m.min - pad), hi = m.dom ? m.dom[1] : m.max + pad;
-  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * (sc + 2.5) / 12.5;
+  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * (sc + 7.5) / 17.5;
   const N = 90, pts = Array.from({ length: N + 1 }, (_, i) => { const x = lo + (hi - lo) * i / N; return { x: X(x), y: Y(m.sc ? m.sc(x) : scoreMetric(m, x).score) }; });
   const dd = 'M' + pts.map(q => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join('L');
   const fl = x => x.toFixed(m.u === 'x' ? 2 : 1) + m.u;
   let g = '';
-  [-2.5, 0, 5, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
+  [-7.5, 0, 5, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
   const vv = clamp(m.v, lo, hi), mx = X(vv), my = Y(m.score);
   const svg = `<svg viewBox="0 0 340 158"><defs><linearGradient id="mgrad" gradientUnits="userSpaceOnUse" x1="0" y1="${B}" x2="0" y2="${T}">
       <stop offset="0" stop-color="#9a4b3f"/><stop offset=".4" stop-color="#b58a3a"/><stop offset=".7" stop-color="#4f8c68"/><stop offset="1" stop-color="#1f6b7a"/></linearGradient></defs>
@@ -736,7 +748,7 @@ function analyzeProfile(pts) {
     const bad = !isFinite(v); if (bad) v = 0;
     let score = 0, tier = 0, txt = null;
     try { score = bad ? 0 : m.sc(v); tier = m.tier(v); txt = m.text ? m.text() : null; } catch {}
-    return { ...m, v, bad, score: clamp(score, -2.5, 10), tier, txt };
+    return { ...m, v, bad, score: clamp(score, -7.5, 10), tier, txt };
   });
   const okP = R.filter(m => !m.bad);
   return { R, harmony: okP.length ? clamp(okP.reduce((t, m) => t + m.score, 0) / okP.length, 0, 10) : 0 };
@@ -1640,52 +1652,92 @@ function drawCover(g, im, x, y, w, h, r, fy) {
   g.save(); rrPath(g, x, y, w, h, r); g.clip(); g.drawImage(im, sx, sy, sw, sh, x, y, w, h); g.restore();
 }
 async function buildCard() {
-  try { await document.fonts?.ready; } catch {}
-  const f = finalScore(), CW = 1080, CH = 1560, P0 = 56, FONT = 'Manrope, system-ui, -apple-system, sans-serif';
-  const c = Object.assign(document.createElement('canvas'), { width: CW, height: CH }), g = c.getContext('2d');
-  const bg = g.createLinearGradient(0, 0, 0, CH); bg.addColorStop(0, '#1b4a55'); bg.addColorStop(1, '#0d2227');
-  g.fillStyle = bg; g.fillRect(0, 0, CW, CH);
-  let y = P0;
-  const brand = BRAND();
-  g.fillStyle = '#ffffffd9'; g.font = `700 36px ${FONT}`; if (brand) g.fillText(brand, P0, y + 30);
-  g.textAlign = 'right'; g.font = `500 30px ${FONT}`; g.fillStyle = '#ffffff99';
-  g.fillText(new Date(cur.updated).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }), CW - P0, y + 30); g.textAlign = 'left';
-  y += 72;
+  const FONT = 'Manrope, system-ui, -apple-system, sans-serif';
+  try { await Promise.all(['500', '600', '700', '800'].map(w => document.fonts.load(`${w} 30px Manrope`))); await document.fonts.ready; } catch {}
+  const f = finalScore(), CW = 1080, PAD = 28, IW = CW - 2 * PAD, heroH = 760, keys = Object.keys(W);
   const imgs = [await loadUrl(cur.img)]; if (cur.pimg) imgs.push(await loadUrl(cur.pimg));
-  const ph = 600, gap = 20, pw = (CW - 2 * P0 - gap * (imgs.length - 1)) / imgs.length;
-  imgs.forEach((im, i) => drawCover(g, im, P0 + i * (pw + gap), y, pw, ph, 36, i ? .15 : .25));
-  y += ph + 50;
-  g.fillStyle = '#fff'; g.font = `800 170px ${FONT}`;
-  const num = f.ready ? f.total.toFixed(1) : '—'; g.fillText(num, P0, y + 130);
-  const nw_ = g.measureText(num).width; g.font = `600 60px ${FONT}`; g.fillStyle = '#ffffff99'; g.fillText('/10', P0 + nw_ + 16, y + 130);
-  if (f.ready) {
-    g.font = `700 44px ${FONT}`; g.fillStyle = '#fff'; g.fillText(label(f.total), P0, y + 200);
-    g.font = `600 36px ${FONT}`; g.fillStyle = '#9fd3dc'; g.fillText(`Top ${fmtTop(topOf(f.total))}%`, P0, y + 252);
+  let curve = null;                                                            // кривая «где вы в популяции» — как в обзоре
+  try {
+    const cw = IW - 64, ch = Math.round(cw * 222 / 340);
+    const svg = curveSvg(f.ready ? f.total : null).replace('<svg ', `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" style="font-family:system-ui,-apple-system,sans-serif" `);
+    curve = { im: await loadUrl('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)), w: cw, h: ch };
+  } catch {}
+  const note = f.ready ? `Примерно 1 из ${Math.max(1, Math.round(100 / topOf(f.total))).toLocaleString('ru-RU')} человек.` : '';
+  const hHead = 96, hHero = heroH + 28, hCurve = curve ? 32 + 44 + curve.h + (note ? 56 : 16) + 32 : 0, hPill = 32 + 44 + keys.length * 104 + 112 + 24;
+  const CH = PAD + hHead + hHero + (curve ? hCurve + 28 : 0) + hPill + PAD;
+  const c = Object.assign(document.createElement('canvas'), { width: CW, height: CH }), g = c.getContext('2d');
+  const card = (x, y, w, h) => { g.save(); g.shadowColor = 'rgba(10,42,53,.10)'; g.shadowBlur = 24; g.shadowOffsetY = 3; rrPath(g, x, y, w, h, 44); g.fillStyle = '#fff'; g.fill(); g.restore(); };
+  const T = (txt, x, y, font, color, al = 'left') => { g.font = font; g.fillStyle = color; g.textAlign = al; g.fillText(txt, x, y); g.textAlign = 'left'; };
+  g.fillStyle = '#f5f7f8'; g.fillRect(0, 0, CW, CH); g.textBaseline = 'alphabetic';
+  let y = PAD;
+  const brand = BRAND();
+  if (brand) T(brand, PAD, y + 58, `800 44px ${FONT}`, '#1c2a30');
+  T(fmtDate(cur.updated), CW - PAD, y + 56, `500 26px ${FONT}`, '#7b8d93', 'right');
+  y += hHead;
+  /* hero: фото + итоговая оценка */
+  const gap = 4, pw = (IW - gap * (imgs.length - 1)) / imgs.length;
+  g.save(); rrPath(g, PAD, y, IW, heroH, 48); g.clip();
+  imgs.forEach((im, i) => drawCover(g, im, PAD + i * (pw + gap), y, pw, heroH, 0, i ? .15 : .25));
+  const gr = g.createLinearGradient(0, y + heroH - 300, 0, y + heroH); gr.addColorStop(0, 'rgba(23,96,106,0)'); gr.addColorStop(1, 'rgba(23,96,106,.88)');
+  g.fillStyle = gr; g.fillRect(PAD, y + heroH - 300, IW, 300); g.restore();
+  const xr = CW - PAD - 40;
+  T('Итоговая оценка', PAD + 40, y + heroH - 44, `600 30px ${FONT}`, '#fff');
+  T('/10', xr, y + heroH - 96, `500 28px ${FONT}`, 'rgba(255,255,255,.8)', 'right');
+  g.font = `500 28px ${FONT}`; const w10 = g.measureText('/10').width;
+  T(f.ready ? f.total.toFixed(1) : '—', xr - w10 - 8, y + heroH - 96, `600 76px ${FONT}`, '#fff', 'right');
+  T(f.ready ? `${label(f.total)} · Top ${fmtTop(topOf(f.total))}%` : 'Оцените все 4 столпа', xr, y + heroH - 44, `500 25px ${FONT}`, 'rgba(255,255,255,.85)', 'right');
+  y += hHero;
+  /* кривая */
+  if (curve) {
+    card(PAD, y, IW, hCurve);
+    T('Где вы в популяции', PAD + 32, y + 32 + 30, `700 32px ${FONT}`, '#1c2a30');
+    g.drawImage(curve.im, PAD + 32, y + 32 + 44, curve.w, curve.h);
+    if (note) T(note, PAD + 32, y + 32 + 44 + curve.h + 38, `500 24px ${FONT}`, '#7b8d93');
+    y += hCurve + 28;
   }
-  y += 330;
-  Object.keys(W).forEach(k => {
-    const v = f.parts[k];
-    g.font = `600 40px ${FONT}`; g.fillStyle = '#ffffffe6'; g.textAlign = 'left'; g.fillText(WNAME[k], P0, y + 14);
-    const bx = P0 + 330, bw = CW - P0 - 150 - bx;
-    rrPath(g, bx, y - 10, bw, 18, 9); g.fillStyle = '#ffffff22'; g.fill();
-    if (v != null) { rrPath(g, bx, y - 10, Math.max(18, bw * v / 10), 18, 9); g.fillStyle = '#5fc4d4'; g.fill(); }
-    g.textAlign = 'right'; g.font = `700 44px ${FONT}`; g.fillStyle = '#fff'; g.fillText(v == null ? '—' : v.toFixed(1), CW - P0, y + 16); g.textAlign = 'left';
-    y += 92;
+  /* столпы */
+  card(PAD, y, IW, hPill);
+  T('Столпы', PAD + 32, y + 32 + 30, `700 32px ${FONT}`, '#1c2a30');
+  let ry = y + 32 + 44;
+  keys.forEach(k => {
+    g.fillStyle = '#e6ecee'; g.fillRect(PAD + 32, ry, IW - 64, 2);
+    T(WNAME[k], PAD + 32, ry + 46, `500 29px ${FONT}`, '#1c2a30');
+    const sub = `вес ${W[k]}` + (k === 'harm' ? ` · анфас ${fmtS(cur.harmony)} · профиль ${fmtS(cur.pHarmony)}` : '');
+    T(sub, PAD + 32, ry + 78, `500 22px ${FONT}`, '#7b8d93');
+    T(fmtS(f.parts[k]), CW - PAD - 32, ry + 62, `700 34px ${FONT}`, '#1f6b7a', 'right');
+    ry += 104;
   });
+  g.fillStyle = '#e6ecee'; g.fillRect(PAD + 32, ry, IW - 64, 2);
+  T('Итог', PAD + 32, ry + 70, `700 32px ${FONT}`, '#1c2a30');
+  T('/10', CW - PAD - 32, ry + 70, `500 24px ${FONT}`, '#7b8d93', 'right');
+  g.font = `500 24px ${FONT}`; const wt = g.measureText('/10').width;
+  T(f.ready ? f.total.toFixed(1) : '—', CW - PAD - 32 - wt - 6, ry + 72, `600 44px ${FONT}`, '#1f6b7a', 'right');
   return c;
 }
 async function shareCard() {
   toast('Готовлю карточку…');
-  let blob;
-  try { const c = await buildCard(); blob = await new Promise(r => c.toBlob(r, 'image/png')); if (!blob) throw 0; }
+  let c, blob;
+  try { c = await buildCard(); blob = await new Promise(r => c.toBlob(r, 'image/png')); if (!blob) throw 0; }
   catch { return toast('Не удалось создать карточку'); }
   const file = new File([blob], 'analysis.png', { type: 'image/png' });
   try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (e) { if (e?.name === 'AbortError') return; }
-  const url = URL.createObjectURL(blob);                       // запасной вариант: показываем картинку, её можно сохранить и отправить вручную
+  showCard(c.toDataURL('image/png'), blob, file);
+}
+/* запасной экран: системное «Поделиться» недоступно (часто в окне Telegram) — даём все остальные способы получить картинку */
+function showCard(dataUrl, blob, file) {
   const ov = Object.assign(document.createElement('div'), { className: 'ov' });
-  ov.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px;align-items:center;max-height:100%"><img src="${url}" alt="" style="max-height:72vh;object-fit:contain">
-    <a href="${url}" download="analysis.png" class="btn" style="text-align:center;text-decoration:none;max-width:320px">Сохранить картинку</a>
-    <span style="color:#fffc;font-size:12px;text-align:center">Или удерживайте картинку, чтобы сохранить или отправить</span></div>`;
+  ov.innerHTML = `<div style="width:100%;max-width:440px;max-height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-x="share">Поделиться</button><button class="btn sm sec" data-x="copy">Копировать</button>
+      <a class="btn sm sec" data-x="save" href="${dataUrl}" download="analysis.png" style="text-decoration:none;text-align:center">Скачать</a><button class="btn sm sec" data-x="close">Закрыть</button></div>
+    <img src="${dataUrl}" alt="" style="width:100%;border-radius:16px;background:#fff">
+    <span style="color:#fffc;font-size:12px;text-align:center">Если кнопки не сработали: удерживайте картинку и сохраните или отправьте её.</span></div>`;
+  ov.firstElementChild.addEventListener('click', async e => {
+    e.stopPropagation();
+    const x = e.target.closest('[data-x]')?.dataset.x;
+    if (x === 'close') ov.remove();
+    else if (x === 'share') { try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] }); else toast('Поделиться тут недоступно'); } catch (er) { if (er?.name !== 'AbortError') toast('Не удалось поделиться'); } }
+    else if (x === 'copy') { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); toast('Картинка скопирована'); } catch { toast('Копирование недоступно'); } }
+  });
   document.body.appendChild(ov);
 }
 
