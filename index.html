@@ -403,7 +403,7 @@ metric('Bigonial Width', 'Ширина по верхним углам челюс
 metric('Neck Width', 'Ширина шеи к ширине по верхним углам челюсти', 90, 98, '%', 1, () => d('neckLeft', 'neckRight') / tgw() * 100, 'neckLeft-neckRight,leftTopGonion-rightTopGonion');
 metric('Canthal Tilt', 'Наклон глаз: угол линии «внутренний — внешний угол» к горизонтали', 5, 9, '°', 2, ctilt, '$EyeMedialCanthus-$EyeLateralCanthus', canthalGeom);
 metric('ESR', 'Расстояние между зрачками к ширине скул', 44.3, 47.3, '%', 2, () => ipd() / zy() * 100, 'leftEyePupil-rightEyePupil,' + ZY);
-metric('One Eye Apart Test', 'Расстояние между внутренними углами глаз к ширине глаза', .93, 1.04, 'x', 1, () => icd() / avg(ew), 'leftEyeMedialCanthus-rightEyeMedialCanthus,leftEyeMedialCanthus-leftEyeLateralCanthus,rightEyeMedialCanthus-rightEyeLateralCanthus');
+metric('One Eye Apart Test', 'Расстояние между внутренними углами глаз к ширине глаза', 1.10, 1.20, 'x', 1, () => icd() / avg(ew), 'leftEyeMedialCanthus-rightEyeMedialCanthus,leftEyeMedialCanthus-leftEyeLateralCanthus,rightEyeMedialCanthus-rightEyeLateralCanthus');
 metric('Inner Canthal Distance', 'Расстояние между внутренними углами глаз к ширине скул', 25.5, 28, '%', 1, () => icd() / zy() * 100, 'leftEyeMedialCanthus-rightEyeMedialCanthus,' + ZY);
 metric('Outer Canthal Distance', 'Расстояние между внешними углами глаз к ширине скул', .63, .67, 'x', 1, () => d('leftEyeLateralCanthus', 'rightEyeLateralCanthus') / zy(), 'leftEyeLateralCanthus-rightEyeLateralCanthus,' + ZY);
 metric('Medial Canthal Angle', 'Угол между линией «внутренний угол — складка века» и горизонталью', 20, 42, '°', 1,
@@ -449,14 +449,26 @@ metric('PFL to Biozygo', 'Ширина глаза к ширине скул', 19.
    ===================================================================== */
 const DEV_STEP = 2;                                  // сколько % отклонения снимает 1 балл
 const tolOf = m => Math.max((m.max - m.min) / 2, 1e-9);
+/* Тиры → баллы: T1 = 10 (внутри идеала), T1.5 = 7.5, T2 = 5, T3 = 2.5, T4 = 0, T5 = −5.
+   Уровень определяется отклонением от ближайшей границы идеала в % от этой границы (метрики без явной карты). */
+const T_OUT = [7.5, 5, 2.5, 0, -5];                   // баллы за выход из идеала: T1.5, T2, T3, T4, T5
+const T_REL = [1.5, 4, 7, 35];                        // верхние границы отклонения (%) для T1.5, T2, T3, T4; дальше — T5
 function scoreMetric(m, v) {
   const mid = (m.min + m.max) / 2, off = Math.abs(v - mid) / tolOf(m);
-  const dev = v < m.min ? (m.min - v) / (Math.abs(m.min) || 1) * 100
-            : v > m.max ? (v - m.max) / (Math.abs(m.max) || 1) * 100 : 0;
-  return { dev, z: dev, score: Math.max(0, 10 - dev / DEV_STEP), off };
+  const abs = v < m.min ? m.min - v : v > m.max ? v - m.max : 0;
+  const bound = v < m.min ? m.min : m.max, base = Math.abs(bound) > 1e-9 ? Math.abs(bound) : (Math.abs(m.max - m.min) || 1);
+  const dev = abs / base * 100;
+  let score = 10;
+  if (abs > 0) { const k = T_REL.findIndex(b => dev <= b); score = T_OUT[k < 0 ? T_OUT.length - 1 : k]; }
+  return { dev, z: dev, score, off };
 }
 const fmtDev = x => x.toFixed(1) + '%';
 
+/* Идеалы только для женщин (по решению автора: все правки идеалов — для женщин). Мужские значения остаются в metric(...) */
+const FEM_IDEAL = {
+  'EAR': [2.8, 3.3], 'Bitemporal': [80.5, 86.5], 'Top Third': [31, 33], 'Middle Third': [32.4, 34.4], 'Lower Third': [30, 33.1], 'Bigonial Width': [84, 88]
+};
+const FEM_IDEAL_P = { 'Nasofrontal Angle': [139, 151] };
 const ptsOf = m => (m.solo && cur?.own?.[m.name]) ? { ...cur.pts, ...cur.own[m.name] } : cur.pts;
 
 function analyze(pts, level, own) {
@@ -465,10 +477,11 @@ function analyze(pts, level, own) {
     CTX = { pts: (m.solo && own?.[m.name]) ? { ...pts, ...own[m.name] } : pts, rot };
     let v = NaN; try { v = m.f(); } catch {}
     const bad = !isFinite(v); if (bad) v = 0;
-    return { ...m, v, bad, ...scoreMetric(m, v) };
+    const o = gender() === 'female' && FEM_IDEAL[m.name], mm = o ? { ...m, min: o[0], max: o[1] } : m;
+    return { ...mm, v, bad, ...scoreMetric(mm, v) };
   });
-  const sum = R.reduce((t, m) => t + m.score, 0);
-  const harmony = Math.min(10, sum / R.length);
+  const okR = R.filter(m => !m.bad), sum = okR.reduce((t, m) => t + m.score, 0);   // неизмеренные метрики не входят ни в сумму, ни в делитель
+  const harmony = okR.length ? clamp(sum / okR.length, 0, 10) : 0;
   const wsum = R.reduce((t, m) => t + m.w, 0);
   const wdev = R.reduce((t, m) => t + m.dev * m.w, 0) / wsum;
   R.forEach(m => m.cost = (10 - m.score) / R.length);
@@ -504,12 +517,12 @@ function metricCurveCard(m) {
   const L = 34, Rr = 332, T = 14, B = 130;
   const pad = Math.max(.22 * Math.abs(m.min), .22 * Math.abs(m.max), 1e-6);
   const lo = m.dom ? m.dom[0] : (m.min === 0 ? 0 : m.min - pad), hi = m.dom ? m.dom[1] : m.max + pad;
-  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * sc / 10;
+  const X = x => L + (Rr - L) * (x - lo) / (hi - lo), Y = sc => B - (B - T) * (sc + 5) / 15;
   const N = 90, pts = Array.from({ length: N + 1 }, (_, i) => { const x = lo + (hi - lo) * i / N; return { x: X(x), y: Y(m.sc ? m.sc(x) : scoreMetric(m, x).score) }; });
   const dd = 'M' + pts.map(q => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join('L');
   const fl = x => x.toFixed(m.u === 'x' ? 2 : 1) + m.u;
   let g = '';
-  [0, 2, 4, 6, 8, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
+  [-5, 0, 5, 10].forEach(v => g += `<line x1="${L}" x2="${Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6ecee" stroke-width="1.5"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" fill="#aab8bd" text-anchor="end">${v}</text>`);
   const vv = clamp(m.v, lo, hi), mx = X(vv), my = Y(m.score);
   const svg = `<svg viewBox="0 0 340 158"><defs><linearGradient id="mgrad" gradientUnits="userSpaceOnUse" x1="0" y1="${B}" x2="0" y2="${T}">
       <stop offset="0" stop-color="#9a4b3f"/><stop offset=".4" stop-color="#b58a3a"/><stop offset=".7" stop-color="#4f8c68"/><stop offset="1" stop-color="#1f6b7a"/></linearGradient></defs>
@@ -610,23 +623,20 @@ const vline = x => [{ x, y: -1e5 }, { x, y: 1e5 }], hline = y => [{ x: -1e5, y }
 function tierScore(v, min, max, bl, bh) {
   const dv = v < min ? min - v : v > max ? v - max : 0;
   if (!dv) return 10;
-  const B = v < min ? bl : bh, n = B.length + 2;
-  let pd = 0, ps = 10;
-  for (let k = 0; k < B.length; k++) {
-    const ns = 10 * (n - (k + 3)) / (n - 1);
-    if (dv <= B[k]) return ps + (ns - ps) * (dv - pd) / ((B[k] - pd) || 1);
-    pd = B[k]; ps = ns;
-  }
-  return 0;
+  const B = v < min ? bl : bh, n = B.length;
+  if (!n) return T_OUT[T_OUT.length - 1];
+  let j = B.findIndex(b => dv <= b); if (j < 0) j = n;                    // уровень за пределами идеала: 0..n (n = дальше последней границы)
+  return T_OUT[Math.round(j * (T_OUT.length - 1) / n)];                    // растягиваем на лестницу T1.5…T5
 }
 const PM = [];
 function tm(name, ds, min, max, bl, bh, u, f, ln, an, o = {}) {
   const dom = o.dom || [min - bl[bl.length - 1] * 1.25, max + bh[bh.length - 1] * 1.25];
-  PM.push({ name, ds, min, max, u, f, ln, an, ex: o.ex, text: o.text, dom, keys: o.keys, wide: o.wide, clean: o.clean,
+  PM.push({ name, ds, min, max, u, f, ln, an, ex: o.ex, text: o.text, dom, keys: o.keys, wide: o.wide, clean: o.clean, bl, bh,
     sc: v => tierScore(v, min, max, bl, bh),
-    tier: v => { const dv = v < min ? min - v : v > max ? v - max : 0; if (!dv) return 1; const B = v < min ? bl : bh, k = B.findIndex(b => dv <= b); return k < 0 ? B.length + 2 : k + 2; },
+    tier: v => tierIdx(v, min, max, bl, bh),
     show: v => v.toFixed(u === '°' ? 1 : 2) + u });
 }
+const tierIdx = (v, min, max, bl, bh) => { const dv = v < min ? min - v : v > max ? v - max : 0; if (!dv) return 1; const B = v < min ? bl : bh, k = B.findIndex(b => dv <= b); return k < 0 ? B.length + 2 : k + 2; };
 const A3 = (v, a, b) => R => [tri(R, v, a, b)];
 
 tm('Gonial Angle', 'Угол в верхнем углу челюсти между линиями к вырезке уха и к низу подбородка', 112, 123, [2, 5, 8, 15], [2, 5, 8, 15], '°',
@@ -647,7 +657,7 @@ tm('Nasolabial Angle', 'Угол в субназале между линиями
   () => pang('subnasale', 'labraleSuperius', 'infratip'), 'subnasale-labraleSuperius,subnasale-infratip', A3('subnasale', 'labraleSuperius', 'infratip'));
 PM.push({ name: 'Orbital Vector', ds: 'Насколько орбитале впереди (+) или позади (−) вертикали через вершину роговицы, в % от высоты лица', min: 2.5, max: 8, u: '%', dom: [-5, 5],
   f: () => (Qk('orbitale').x - Qk('cornealApex').x) * PC.f / faceH() * 100,
-  sc: v => clamp(5 + 2 * v, 0, 10), tier: v => v >= 2.5 ? 1 : v >= .5 ? 2 : v > -.5 ? 3 : v > -2 ? 4 : 5,
+  sc: v => [10, 7.5, 5, 2.5, 0][(v >= 2.5 ? 1 : v >= .5 ? 2 : v > -.5 ? 3 : v > -2 ? 4 : 5) - 1], tier: v => v >= 2.5 ? 1 : v >= .5 ? 2 : v > -.5 ? 3 : v > -2 ? 4 : 5,
   show: v => v.toFixed(1) + '% · ' + (v >= 2.5 ? 'положительный' : v >= .5 ? 'слегка положительный' : v > -.5 ? 'нейтральный' : v > -2 ? 'слегка отрицательный' : 'отрицательный'),
   keys: ['cornealApex', 'orbitale'], ex: R => { const o = R('orbitale'), c = R('cornealApex'); return { full: [vline(c.x)], sg: [[o, { x: c.x, y: o.y }]] }; } });
 tm('Total Facial Convexity', 'Угол в кончике носа между линиями к глабелле и к подбородку', 137, 148, [2, 4, 7, 10], [2, 4, 8, 11], '°',
@@ -663,19 +673,19 @@ tm('Nasal Width to Height Projection', 'Ширина (субаларе — су�
   { keys: ['nasion'], ex: R => { const sb = R('subalare'), n = R('nasion'); return { sg: [[sb, { x: sb.x, y: n.y }]] }; } });
 PM.push({ name: "Rickett's E-Line", ds: 'Линия кончик носа — подбородок. Идеал: верхняя губа позади линии на 4 мм, нижняя на 2 мм', u: 'мм',
   f: () => { const { u, l } = lipsMm('pronasale', 'pogonion'); return Math.max(Math.abs(-u - 4) / 4, Math.abs(-l - 2) / 2) * 100; },
-  sc: () => { const { u, l } = lipsMm('pronasale', 'pogonion'), ub = -u, lb = -l; if (ub <= 0 || lb <= 0) return 0; const dv = Math.max(Math.abs(ub - 4) / 4, Math.abs(lb - 2) / 2); return dv <= .25 ? 10 : Math.max(0, 10 - (dv - .25) * 5 / .75); },
+  sc: () => { const { u, l } = lipsMm('pronasale', 'pogonion'), ub = -u, lb = -l; if (ub <= 0 || lb <= 0) return 0; const dv = Math.max(Math.abs(ub - 4) / 4, Math.abs(lb - 2) / 2); return dv <= .25 ? 10 : dv <= 1 ? 5 : 0; },
   tier: () => { const { u, l } = lipsMm('pronasale', 'pogonion'), ub = -u, lb = -l; if (ub <= 0 || lb <= 0) return 3; const dv = Math.max(Math.abs(ub - 4) / 4, Math.abs(lb - 2) / 2); return dv <= .25 ? 1 : dv <= 1 ? 2 : 3; },
   show: v => v.toFixed(0) + '%', text: () => { const { u, l } = lipsMm('pronasale', 'pogonion'); return `верхняя ${(-u).toFixed(1)} мм · нижняя ${(-l).toFixed(1)} мм позади линии`; },
   ln: 'pronasale-pogonion', keys: ['labraleSuperius', 'labraleInferius'], ex: R => ({ sg: feet(R, ['labraleSuperius', 'labraleInferius'], 'pronasale', 'pogonion') }) });
 PM.push({ name: 'Holdaway H-Line', ds: 'Линия верхняя губа — подбородок. Нижняя губа должна касаться линии', u: 'мм',
   f: () => lipsMm('labraleSuperius', 'pogonion').l,
-  sc: v => { const a = Math.abs(v); return a <= 1 ? 10 : a <= 3 ? 10 - (a - 1) * 2.5 : Math.max(0, 5 - (a - 3) * 2.5); },
+  sc: v => { const a = Math.abs(v); return a <= 1 ? 10 : a <= 3 ? 5 : 0; },
   tier: v => { const a = Math.abs(v); return a <= 1 ? 1 : a <= 3 ? 2 : 3; },
   show: v => v.toFixed(1) + ' мм', text: () => { const d = lipsMm('labraleSuperius', 'pogonion').l; return `нижняя губа ${d >= 0 ? 'впереди' : 'позади'} линии на ${Math.abs(d).toFixed(1)} мм`; },
   ln: 'labraleSuperius-pogonion', keys: ['labraleInferius'], ex: R => ({ sg: feet(R, ['labraleInferius'], 'labraleSuperius', 'pogonion') }) });
 PM.push({ name: 'Steiner S-Line', ds: 'Линия колумелла — подбородок. Обе губы должны касаться линии', u: 'мм',
   f: () => { const { u, l } = lipsMm('columella', 'pogonion'); return Math.max(Math.abs(u), Math.abs(l)); },
-  sc: () => { const { u, l } = lipsMm('columella', 'pogonion'); return 10 - 5 * Math.min(1, Math.max(Math.abs(u) - 1, 0) / 2) - 5 * Math.min(1, Math.max(Math.abs(l) - 1, 0) / 2); },
+  sc: () => { const { u, l } = lipsMm('columella', 'pogonion'); return [10, 5, 0][(Math.abs(u) > 1) + (Math.abs(l) > 1)]; },
   tier: () => { const { u, l } = lipsMm('columella', 'pogonion'); return 1 + (Math.abs(u) > 1) + (Math.abs(l) > 1); },
   show: v => v.toFixed(1) + ' мм', text: () => { const { u, l } = lipsMm('columella', 'pogonion'); return `верхняя ${u.toFixed(1)} мм · нижняя ${l.toFixed(1)} мм от линии`; },
   ln: 'columella-pogonion', keys: ['labraleSuperius', 'labraleInferius'], ex: R => ({ sg: feet(R, ['labraleSuperius', 'labraleInferius'], 'columella', 'pogonion') }) });
@@ -718,14 +728,18 @@ tm('Z Angle', 'Угол между франкфуртской плоскость
 
 function analyzeProfile(pts) {
   PC = profCtx(pts);
-  const R = PM.map(m => {
+  const R = PM.map(m0 => {
+    const ov = gender() === 'female' && FEM_IDEAL_P[m0.name], o = ov && m0.bl ? ov : null;
+    const m = o ? { ...m0, min: o[0], max: o[1], dom: [o[0] - m0.bl[m0.bl.length - 1] * 1.25, o[1] + m0.bh[m0.bh.length - 1] * 1.25],
+                    sc: v => tierScore(v, o[0], o[1], m0.bl, m0.bh), tier: v => tierIdx(v, o[0], o[1], m0.bl, m0.bh) } : m0;
     let v = NaN; try { v = m.f(); } catch {}
     const bad = !isFinite(v); if (bad) v = 0;
     let score = 0, tier = 0, txt = null;
     try { score = bad ? 0 : m.sc(v); tier = m.tier(v); txt = m.text ? m.text() : null; } catch {}
-    return { ...m, v, bad, score: clamp(score, 0, 10), tier, txt };
+    return { ...m, v, bad, score: clamp(score, -5, 10), tier, txt };
   });
-  return { R, harmony: R.reduce((t, m) => t + m.score, 0) / R.length };
+  const okP = R.filter(m => !m.bad);
+  return { R, harmony: okP.length ? clamp(okP.reduce((t, m) => t + m.score, 0) / okP.length, 0, 10) : 0 };
 }
 const profDone = r => !!r.pimg && PPTS.every(p => r.ppts?.[p.k]);
 const combinedHarmony = () => cur?.harmony == null ? null : cur.pHarmony != null ? (cur.harmony + cur.pHarmony) / 2 : cur.harmony;
@@ -748,11 +762,10 @@ function renderProfileDetail(i) {
   det = { kind: 'p', i };
   const m = PRES[i], keys = [...new Set([...(m.ln ? segs(m.ln).flat() : []), ...(m.keys || [])])].map(k => PPTS.find(p => p.k === k)).filter(Boolean);
   render('pdetail', `<div class="top"><h1>${m.name}</h1>${scoreHtml(m.score)}</div>
-    <div class="mute">Tier ${m.tier}</div>
     <div class="card det" style="display:block">${pMeasureSvg(m)}${m.dom ? metricCurveCard(m) : ''}<p>${m.ds}</p>
       <div class="gl">${keys.map(p => `<figure>${dgm(p.k)}${p.ru}</figure>`).join('')}</div>
-      <p><b>Значение:</b> ${m.txt ?? m.show(m.v)}</p>${m.min != null && m.max != null ? `<p><b>Идеал (Tier 1):</b> ${m.max >= 1e8 ? 'от ' + m.min : m.min + '–' + m.max}${m.u === 'мм' ? '' : m.u}</p>` : ''}
-      <p><b>Tier ${m.tier} · оценка ${m.score.toFixed(1)}/10</b></p></div>
+      <p><b>Значение:</b> ${m.txt ?? m.show(m.v)}</p>${m.min != null && m.max != null ? `<p><b>Идеал:</b> ${m.max >= 1e8 ? 'от ' + m.min : m.min + '–' + m.max}${m.u === 'мм' ? '' : m.u}</p>` : ''}
+      <p><b>Оценка:</b> ${m.score.toFixed(1)}/10</p></div>
     <div class="row"><button class="btn sec" data-a="back">‹ Назад</button></div>${detNav()}`, true);
 }
 
@@ -997,7 +1010,8 @@ function overView() {
               : '<p class="mute" style="font-size:12px">Метка появится, когда будут оценены все 4 столпа.</p>') +
     `<div class="card"><h3>Столпы</h3>${rows}
       <div class="rrow" style="cursor:default"><span><b>Итог</b>${f.ready ? '' : '<small class="full">Оцените все 4 столпа, чтобы получить итог</small>'}</span>
-        <b class="sc">${f.ready ? f.total.toFixed(1) : '—'}<small style="font-size:12px;color:var(--mute)">/10</small></b></div></div>`;
+        <b class="sc">${f.ready ? f.total.toFixed(1) : '—'}<small style="font-size:12px;color:var(--mute)">/10</small></b></div></div>
+    <div class="row"><button class="btn" data-a="share">Поделиться карточкой</button></div>`;
 }
 
 const PCATS = [
@@ -1040,7 +1054,7 @@ const fPill = (m, i) => {
   return `<div class="pill" data-a="mopen" data-i="${i}" style="cursor:pointer"><div class="ph"><span>${m.name}<b class="badge">${fmtVal(m.v, m.u)}</b>${FULL[m.name] ? `<small class="full">${FULL[m.name]}</small>` : ''}</span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div>
     <div class="zone"><i style="left:${pos}%"></i></div></div>`;
 };
-const pPill = (m, i) => `<div class="pill" data-a="popen" data-i="${i}" style="cursor:pointer"><div class="ph"><span>${m.name}<b class="badge">${m.txt ?? m.show(m.v)}</b><small class="full">Tier ${m.tier}</small></span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div></div>`;
+const pPill = (m, i) => `<div class="pill" data-a="popen" data-i="${i}" style="cursor:pointer"><div class="ph"><span>${m.name}<b class="badge">${m.txt ?? m.show(m.v)}</b></span><b class="sc">${m.score.toFixed(1)}<small style="font-size:12px;color:var(--mute)">/10</small></b><em>›</em></div></div>`;
 
 function sideView() {
   const file = '<input type="file" id="pfile" accept="image/*" hidden>';
@@ -1593,6 +1607,7 @@ const ACTIONS = {
   rclr() { delete cur.ref[rate.key]; persist(); refShow(false); },
   rprev: () => rateStep(-1),
   rnext: () => rateStep(1),
+  share: () => shareCard(),
   zoom({ k }) { zoomImg(`${IMG_DIR}/${k}.webp`); },
   zoomsrc(_, el) { if (el.getAttribute('src') && el.style.visibility !== 'hidden') zoomImg(el.src); },
   close: (_, el) => el.remove()
@@ -1616,6 +1631,63 @@ app.addEventListener('change', async e => {
   }
 });
 try { tg?.BackButton?.onClick(goBack); } catch {}
+
+/* ---------- карточка оценки для отправки: это картинка, получатель может её только смотреть ---------- */
+const loadUrl = u => new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = u; });
+function rrPath(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function drawCover(g, im, x, y, w, h, r, fy) {
+  const k = Math.max(w / im.width, h / im.height), sw = w / k, sh = h / k, sx = (im.width - sw) / 2, sy = (im.height - sh) * fy;
+  g.save(); rrPath(g, x, y, w, h, r); g.clip(); g.drawImage(im, sx, sy, sw, sh, x, y, w, h); g.restore();
+}
+async function buildCard() {
+  try { await document.fonts?.ready; } catch {}
+  const f = finalScore(), CW = 1080, CH = 1560, P0 = 56, FONT = 'Manrope, system-ui, -apple-system, sans-serif';
+  const c = Object.assign(document.createElement('canvas'), { width: CW, height: CH }), g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, CH); bg.addColorStop(0, '#1b4a55'); bg.addColorStop(1, '#0d2227');
+  g.fillStyle = bg; g.fillRect(0, 0, CW, CH);
+  let y = P0;
+  const brand = BRAND();
+  g.fillStyle = '#ffffffd9'; g.font = `700 36px ${FONT}`; if (brand) g.fillText(brand, P0, y + 30);
+  g.textAlign = 'right'; g.font = `500 30px ${FONT}`; g.fillStyle = '#ffffff99';
+  g.fillText(new Date(cur.updated).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }), CW - P0, y + 30); g.textAlign = 'left';
+  y += 72;
+  const imgs = [await loadUrl(cur.img)]; if (cur.pimg) imgs.push(await loadUrl(cur.pimg));
+  const ph = 600, gap = 20, pw = (CW - 2 * P0 - gap * (imgs.length - 1)) / imgs.length;
+  imgs.forEach((im, i) => drawCover(g, im, P0 + i * (pw + gap), y, pw, ph, 36, i ? .15 : .25));
+  y += ph + 50;
+  g.fillStyle = '#fff'; g.font = `800 170px ${FONT}`;
+  const num = f.ready ? f.total.toFixed(1) : '—'; g.fillText(num, P0, y + 130);
+  const nw_ = g.measureText(num).width; g.font = `600 60px ${FONT}`; g.fillStyle = '#ffffff99'; g.fillText('/10', P0 + nw_ + 16, y + 130);
+  if (f.ready) {
+    g.font = `700 44px ${FONT}`; g.fillStyle = '#fff'; g.fillText(label(f.total), P0, y + 200);
+    g.font = `600 36px ${FONT}`; g.fillStyle = '#9fd3dc'; g.fillText(`Top ${fmtTop(topOf(f.total))}%`, P0, y + 252);
+  }
+  y += 330;
+  Object.keys(W).forEach(k => {
+    const v = f.parts[k];
+    g.font = `600 40px ${FONT}`; g.fillStyle = '#ffffffe6'; g.textAlign = 'left'; g.fillText(WNAME[k], P0, y + 14);
+    const bx = P0 + 330, bw = CW - P0 - 150 - bx;
+    rrPath(g, bx, y - 10, bw, 18, 9); g.fillStyle = '#ffffff22'; g.fill();
+    if (v != null) { rrPath(g, bx, y - 10, Math.max(18, bw * v / 10), 18, 9); g.fillStyle = '#5fc4d4'; g.fill(); }
+    g.textAlign = 'right'; g.font = `700 44px ${FONT}`; g.fillStyle = '#fff'; g.fillText(v == null ? '—' : v.toFixed(1), CW - P0, y + 16); g.textAlign = 'left';
+    y += 92;
+  });
+  return c;
+}
+async function shareCard() {
+  toast('Готовлю карточку…');
+  let blob;
+  try { const c = await buildCard(); blob = await new Promise(r => c.toBlob(r, 'image/png')); if (!blob) throw 0; }
+  catch { return toast('Не удалось создать карточку'); }
+  const file = new File([blob], 'analysis.png', { type: 'image/png' });
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (e) { if (e?.name === 'AbortError') return; }
+  const url = URL.createObjectURL(blob);                       // запасной вариант: показываем картинку, её можно сохранить и отправить вручную
+  const ov = Object.assign(document.createElement('div'), { className: 'ov' });
+  ov.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px;align-items:center;max-height:100%"><img src="${url}" alt="" style="max-height:72vh;object-fit:contain">
+    <a href="${url}" download="analysis.png" class="btn" style="text-align:center;text-decoration:none;max-width:320px">Сохранить картинку</a>
+    <span style="color:#fffc;font-size:12px;text-align:center">Или удерживайте картинку, чтобы сохранить или отправить</span></div>`;
+  document.body.appendChild(ov);
+}
 
 /* ---------- старт ---------- */
 (async () => { try { await migrateOldDraft(); } catch {} try { await renderHome(); } catch (e) { showFatal(e?.stack || e); } })();
